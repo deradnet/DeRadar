@@ -1,0 +1,16 @@
+{
+  "name": "DeRadar - Decentralized Aircraft Tracking",
+  "short_name": "DeRadar",
+  "description": "Real-time and historical aircraft tracking powered by Ar.io & Arweave",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0f172a",
+  "theme_color": "#0f172a",
+  "icons": [
+    {
+      "src": "/favicon.ico",
+      "sizes": "any",
+      "type": "image/x-icon"
+    }
+  ]
+}
