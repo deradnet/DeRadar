@@ -1,16 +1,18 @@
-import { resolveUrl, getGatewayInfo } from "@/lib/domain-resolver"
+import { resolveGraphQLUrl, resolveDataUrl, getGatewayInfo } from "@/lib/domain-resolver"
 
 /**
  * Application Configuration
  * Centralized configuration for all URLs, API endpoints, and important parameters
  * Update this file before deployment to customize the application
  *
- * Gateway Resolution:
+ * Gateway Resolution with Fallback:
  * - Use "gateway" to auto-detect from current hostname
+ * - Automatically falls back to derad.network if endpoints are not available
  * - Use specific domain to override auto-detection
  *
  * Examples:
  * - Running on map.example.com → gateway resolves to example.com
+ * - If example.com/graphql returns 404 → falls back to derad.network/graphql
  */
 
 export const APP_CONFIG = {
@@ -49,12 +51,12 @@ export const APP_CONFIG = {
       updateInterval: 3000, // 3 seconds between updates
     },
 
-    // Historical data - Smart Gateway Resolution
-    // Use "gateway" for auto-detection from hostname
+    // Historical data - Smart Gateway Resolution with Fallback
+    // Use "gateway" for auto-detection from hostname with fallback to derad.network
     // Use specific domain like "derad.network" to override
     historical: {
-      graphqlUrl: "https://gateway/graphql", // Auto-detects gateway from hostname
-      dataUrl: "https://gateway", // Auto-detects gateway from hostname
+      graphqlUrl: "https://gateway/graphql", // Auto-detects gateway, falls back to derad.network
+      dataUrl: "https://gateway", // Auto-detects gateway, falls back to derad.network
       owner: "Vpu86GpNgl3H7yAPUzl8XvxdQmu3VPqJMsItF29SRB4",
       appName: "DeradNetworkBackup",
       timeout: 15000,
@@ -62,7 +64,7 @@ export const APP_CONFIG = {
       retryDelay: 2000,
     },
 
-    // Alternative: Use specific domain (no auto-detection)
+    // Alternative: Use specific domain (no auto-detection or fallback)
     // historical: {
     //   graphqlUrl: "https://derad.network/graphql",  // Uses specific domain
     //   dataUrl: "https://derad.network",             // Uses specific domain
@@ -77,9 +79,8 @@ export const APP_CONFIG = {
     },
 
     // Backup data sources (if primary fails)
-    // Used for testing in beta
     backup: {
-      aircraft: ["https://backup-antenna-1.derad.org/data/aircraft.json", "https://backup-antenna-2.derad.net/data/aircraft.json"],
+      aircraft: ["https://backup1.example.com/aircraft.json", "https://backup2.example.com/aircraft.json"],
       enabled: false,
     },
   },
@@ -475,12 +476,12 @@ export const DEPLOYMENT_PRESETS = {
   },
 } as const
 
-// Smart gateway resolution helper
+// Smart gateway resolution helper with fallback
 export const resolveApiUrls = async () => {
   const config = getConfig()
   return {
-    graphqlUrl: await resolveUrl(config.api.historical.graphqlUrl),
-    dataUrl: await resolveUrl(config.api.historical.dataUrl),
+    graphqlUrl: await resolveGraphQLUrl(config.api.historical.graphqlUrl),
+    dataUrl: await resolveDataUrl(config.api.historical.dataUrl),
   }
 }
 

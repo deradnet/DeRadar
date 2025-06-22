@@ -1,6 +1,6 @@
 /**
- * Smart Ar.io Gateway Domain Resolution Utility
- * Auto-detects gateway domain from current hostname or uses specified domain
+ * Smart Ar.io Gateway Domain Resolution Utility with Fallback
+ * Auto-detects gateway domain from current hostname with fallback to derad.network
  */
 
 interface DomainTestResult {
@@ -39,9 +39,9 @@ export function extractGatewayDomain(hostname?: string): string {
 }
 
 /**
- * Test domain availability and response time
+ * Test domain availability and response time for GraphQL endpoint
  */
-async function testDomain(domain: string, timeout = 5000): Promise<DomainTestResult> {
+async function testGraphQLEndpoint(domain: string, timeout = 5000): Promise<DomainTestResult> {
   const startTime = Date.now()
 
   try {
@@ -78,14 +78,49 @@ async function testDomain(domain: string, timeout = 5000): Promise<DomainTestRes
 }
 
 /**
- * Resolve URL with smart gateway substitution
+ * Test domain availability for data endpoint
+ */
+async function testDataEndpoint(domain: string, timeout = 5000): Promise<DomainTestResult> {
+  const startTime = Date.now()
+
+  try {
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), timeout)
+
+    // Test with a simple HEAD request to check if domain responds
+    const response = await fetch(`https://${domain}`, {
+      method: "HEAD",
+      signal: controller.signal,
+    })
+
+    clearTimeout(timeoutId)
+    const responseTime = Date.now() - startTime
+
+    return {
+      domain,
+      responseTime,
+      available: response.ok || response.status < 500, // Accept redirects and client errors, but not server errors
+    }
+  } catch (error) {
+    return {
+      domain,
+      responseTime: Date.now() - startTime,
+      available: false,
+    }
+  }
+}
+
+/**
+ * Resolve GraphQL URL with smart gateway substitution and fallback
  * - If URL contains "gateway" → replace with auto-detected gateway domain
+ * - Test if GraphQL endpoint is available
+ * - If not available, fallback to derad.network
  * - If URL contains specific domain → use that domain as-is
  */
-export async function resolveUrl(url: string): Promise<string> {
+export async function resolveGraphQLUrl(url: string): Promise<string> {
   // If URL doesn't contain "gateway", return as-is
   if (!url.includes("gateway")) {
-    console.log(`📋 Using specified domain: ${url}`)
+    console.log(`📋 Using specified GraphQL domain: ${url}`)
     return url
   }
 
@@ -93,20 +128,78 @@ export async function resolveUrl(url: string): Promise<string> {
   const gatewayDomain = extractGatewayDomain()
   const resolvedUrl = url.replace(/gateway/g, gatewayDomain)
 
-  console.log(`🎯 Resolved gateway URL: ${url} → ${resolvedUrl}`)
-  return resolvedUrl
+  console.log(`🎯 Testing GraphQL URL: ${resolvedUrl}`)
+
+  // Test if the resolved gateway has GraphQL endpoint
+  const testResult = await testGraphQLEndpoint(gatewayDomain, 5000)
+
+  if (testResult.available) {
+    console.log(`✅ GraphQL endpoint available on ${gatewayDomain} (${testResult.responseTime}ms)`)
+    return resolvedUrl
+  } else {
+    console.log(`❌ GraphQL endpoint not available on ${gatewayDomain}, falling back to derad.network`)
+    const fallbackUrl = url.replace(/gateway/g, "derad.network")
+    console.log(`🔄 Fallback GraphQL URL: ${fallbackUrl}`)
+    return fallbackUrl
+  }
 }
 
 /**
- * Batch resolve multiple URLs
+ * Resolve Data URL with smart gateway substitution and fallback
+ * - If URL contains "gateway" → replace with auto-detected gateway domain
+ * - Test if data endpoint is available
+ * - If not available, fallback to derad.network
+ * - If URL contains specific domain → use that domain as-is
+ */
+export async function resolveDataUrl(url: string): Promise<string> {
+  // If URL doesn't contain "gateway", return as-is
+  if (!url.includes("gateway")) {
+    console.log(`📋 Using specified data domain: ${url}`)
+    return url
+  }
+
+  // Auto-detect gateway domain from current hostname
+  const gatewayDomain = extractGatewayDomain()
+  const resolvedUrl = url.replace(/gateway/g, gatewayDomain)
+
+  console.log(`🎯 Testing data URL: ${resolvedUrl}`)
+
+  // Test if the resolved gateway has data endpoint
+  const testResult = await testDataEndpoint(gatewayDomain, 5000)
+
+  if (testResult.available) {
+    console.log(`✅ Data endpoint available on ${gatewayDomain} (${testResult.responseTime}ms)`)
+    return resolvedUrl
+  } else {
+    console.log(`❌ Data endpoint not available on ${gatewayDomain}, falling back to derad.network`)
+    const fallbackUrl = url.replace(/gateway/g, "derad.network")
+    console.log(`🔄 Fallback data URL: ${fallbackUrl}`)
+    return fallbackUrl
+  }
+}
+
+/**
+ * Legacy resolve URL function - now uses GraphQL resolver by default
+ * @deprecated Use resolveGraphQLUrl or resolveDataUrl instead
+ */
+export async function resolveUrl(url: string): Promise<string> {
+  return await resolveGraphQLUrl(url)
+}
+
+/**
+ * Batch resolve multiple URLs with smart fallback
  */
 export async function resolveUrls(urls: Record<string, string>): Promise<Record<string, string>> {
-  const gatewayDomain = extractGatewayDomain()
   const resolved: Record<string, string> = {}
 
   for (const [key, url] of Object.entries(urls)) {
     if (url.includes("gateway")) {
-      resolved[key] = url.replace(/gateway/g, gatewayDomain)
+      // Determine if this is a GraphQL or data URL based on the key or URL content
+      if (key.toLowerCase().includes("graphql") || url.includes("/graphql")) {
+        resolved[key] = await resolveGraphQLUrl(url)
+      } else {
+        resolved[key] = await resolveDataUrl(url)
+      }
       console.log(`🎯 Resolved ${key}: ${url} → ${resolved[key]}`)
     } else {
       resolved[key] = url
@@ -139,38 +232,69 @@ export function getGatewayInfo(): {
 }
 
 /**
- * Test gateway availability
+ * Test gateway availability for both GraphQL and data endpoints
  */
-export async function testGatewayAvailability(domain?: string): Promise<DomainTestResult> {
+export async function testGatewayAvailability(domain?: string): Promise<{
+  domain: string
+  graphql: DomainTestResult
+  data: DomainTestResult
+  overall: boolean
+}> {
   const gatewayDomain = domain || extractGatewayDomain()
   console.log(`🧪 Testing gateway availability: ${gatewayDomain}`)
 
-  return await testDomain(gatewayDomain, 5000)
+  const [graphqlResult, dataResult] = await Promise.all([
+    testGraphQLEndpoint(gatewayDomain),
+    testDataEndpoint(gatewayDomain),
+  ])
+
+  return {
+    domain: gatewayDomain,
+    graphql: graphqlResult,
+    data: dataResult,
+    overall: graphqlResult.available && dataResult.available,
+  }
 }
 
 /**
- * Get gateway status with detailed info
+ * Get gateway status with detailed info and fallback recommendations
  */
 export async function getGatewayStatus(): Promise<{
   info: ReturnType<typeof getGatewayInfo>
-  availability: DomainTestResult
+  availability: Awaited<ReturnType<typeof testGatewayAvailability>>
   resolvedUrls: {
     graphql: string
     data: string
   }
+  recommendations: string[]
 }> {
   const info = getGatewayInfo()
   const availability = await testGatewayAvailability()
 
   const resolvedUrls = {
-    graphql: await resolveUrl("https://gateway/graphql"),
-    data: await resolveUrl("https://gateway"),
+    graphql: await resolveGraphQLUrl("https://gateway/graphql"),
+    data: await resolveDataUrl("https://gateway"),
+  }
+
+  const recommendations: string[] = []
+
+  if (!availability.graphql.available) {
+    recommendations.push("GraphQL endpoint not available - using derad.network fallback")
+  }
+
+  if (!availability.data.available) {
+    recommendations.push("Data endpoint not available - using derad.network fallback")
+  }
+
+  if (availability.overall) {
+    recommendations.push("All endpoints available - using detected gateway")
   }
 
   return {
     info,
     availability,
     resolvedUrls,
+    recommendations,
   }
 }
 
@@ -206,9 +330,9 @@ export function validateGatewayDomain(domain: string): {
 }
 
 /**
- * Debug gateway resolution
+ * Debug gateway resolution with fallback testing
  */
-export function debugGatewayResolution(): void {
+export async function debugGatewayResolution(): Promise<void> {
   if (typeof window === "undefined") {
     console.log("🚫 Not running in browser environment")
     return
@@ -222,36 +346,41 @@ export function debugGatewayResolution(): void {
   console.log("Is subdomain:", info.isSubdomain)
   console.log("Subdomain level:", info.subdomainLevel)
 
-  // Test URL resolution
-  const testUrls = ["https://gateway/graphql", "https://gateway/data", "https://specific-domain.com/api"]
+  // Test URL resolution with fallback
+  const testUrls = [
+    { url: "https://gateway/graphql", type: "GraphQL" },
+    { url: "https://gateway", type: "Data" },
+    { url: "https://specific-domain.com/api", type: "Specific" },
+  ]
 
-  console.log("\n📋 URL Resolution Test:")
-  testUrls.forEach(async (url) => {
-    const resolved = await resolveUrl(url)
-    console.log(`${url} → ${resolved}`)
-  })
+  console.log("\n📋 URL Resolution Test with Fallback:")
+  for (const { url, type } of testUrls) {
+    if (type === "GraphQL") {
+      const resolved = await resolveGraphQLUrl(url)
+      console.log(`${url} → ${resolved}`)
+    } else if (type === "Data") {
+      const resolved = await resolveDataUrl(url)
+      console.log(`${url} → ${resolved}`)
+    } else {
+      console.log(`${url} → ${url} (unchanged)`)
+    }
+  }
+
+  // Test gateway availability
+  console.log("\n🧪 Gateway Availability Test:")
+  const availability = await testGatewayAvailability()
+  console.log("GraphQL available:", availability.graphql.available, `(${availability.graphql.responseTime}ms)`)
+  console.log("Data available:", availability.data.available, `(${availability.data.responseTime}ms)`)
+  console.log("Overall status:", availability.overall ? "✅ Available" : "❌ Fallback required")
 
   console.groupEnd()
 }
-
-/**
- * Examples of how the gateway resolution works:
- *
- * Current hostname: map.example.com
- * Gateway domain: example.com
- *
- * Current hostname: map.gs.fh.s.example.com
- * Gateway domain: gs.fh.s.example.com
- *
- * Current hostname: app.data.api.mysite.com
- * Gateway domain: data.api.mysite.com
- *
- * URL: "https://gateway/graphql" → "https://example.com/graphql"
- * URL: "https://specific.com/api" → "https://specific.com/api" (unchanged)
- */
 
 // Legacy exports for backward compatibility
 export const resolveGatewayDomain = extractGatewayDomain
 export const findBestGateway = extractGatewayDomain
 export const resolveArIOGateway = extractGatewayDomain
 export const smartResolveArIOGateway = extractGatewayDomain
+
+// Legacy testDomain function
+export const testDomain = testGraphQLEndpoint
