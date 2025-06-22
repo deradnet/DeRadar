@@ -6,7 +6,8 @@
     "build": "next build",
     "dev": "next dev",
     "lint": "next lint",
-    "start": "next start"
+    "start": "next start",
+    "deploy": "npm run build && permaweb-deploy --deploy-folder ./out --arns-name deradnetwork"
   },
   "dependencies": {
     "@ardrive/turbo-sdk": "latest",
@@ -69,6 +70,7 @@
     "autoprefixer": "^10.4.15",
     "eslint": "^8.47.0",
     "eslint-config-next": "14.2.16",
+    "permaweb-deploy": "^2.1.0",
     "postcss": "^8.5",
     "tailwindcss": "^3.3.3",
     "typescript": "^5"
