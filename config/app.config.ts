@@ -53,8 +53,8 @@ export const APP_CONFIG = {
     // Use "gateway" for auto-detection from hostname
     // Use specific domain like "derad.network" to override
     historical: {
-      graphqlUrl: "https://derad.network/graphql", // Auto-detects gateway from hostname
-      dataUrl: "https://derad.network", // Auto-detects gateway from hostname
+      graphqlUrl: "https://gateways/graphql", // Auto-detects gateway from hostname
+      dataUrl: "https://gateways", // Auto-detects gateway from hostname
       owner: "Vpu86GpNgl3H7yAPUzl8XvxdQmu3VPqJMsItF29SRB4",
       appName: "DeradNetworkBackup",
       timeout: 15000,

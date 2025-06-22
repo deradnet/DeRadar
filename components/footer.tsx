@@ -174,7 +174,7 @@ export function Footer() {
         <div className="border-t border-slate-800/50 mt-8 pt-6">
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
             <div className="text-xs text-slate-500">
-              <span>© {currentYear} Derad Network. All rights reserved.</span>
+              <span>© {currentYear} DeRadar </span>
               <span className="mx-1 sm:mx-2">|</span>
               <span>v{appVersion}</span>
               <span className="mx-1 sm:mx-2">|</span>
