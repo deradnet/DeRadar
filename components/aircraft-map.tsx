@@ -28,11 +28,11 @@ const MAP_CONFIG = {
     },
     satellite: {
       url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
-      attribution: "", 
+      attribution: "",
     },
     terrain: {
       url: "https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png",
-      attribution: "", 
+      attribution: "",
     },
   },
   aircraft: {
@@ -661,6 +661,15 @@ export function AircraftMap({
                   .addTo(mapInstance)
                   .bindPopup(popupContent, {
                     className: "custom-popup",
+                    closeButton: false,
+                    autoClose: false,
+                    closeOnClick: false,
+                  })
+                  .on("mouseover", function () {
+                    this.openPopup()
+                  })
+                  .on("mouseout", function () {
+                    this.closePopup()
                   })
                   .on("click", () => {
                     const flightData: SelectedFlight = {
