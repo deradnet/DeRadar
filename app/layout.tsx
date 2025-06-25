@@ -1,15 +1,17 @@
-import type React from "react"
-import type { Metadata } from "next"
-import { Inter } from "next/font/google"
-import "./globals.css"
-import { ThemeProvider } from "@/components/theme-provider"
-import { Toaster } from "@/components/ui/toaster"
+import type React from "react";
+import type { Metadata } from "next";
+import { Inter } from "next/font/google";
+import "./globals.css";
 
-const inter = Inter({ subsets: ["latin"] })
+import { ThemeProvider } from "@/components/theme-provider";
+import { Toaster } from "@/components/ui/toaster";
+
+const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
   title: "DeRadar - Decentralized Aircraft Tracking",
-  description: "Real-time and historical aircraft tracking powered by Ar.io & Arweave",
+  description:
+    "Real-time and historical aircraft tracking powered by Ar.io & Arweave",
   keywords: ["aircraft", "tracking", "radar", "aviation", "arweave", "decentralized"],
   authors: [{ name: "Derad Network" }],
   creator: "Derad Network",
@@ -26,13 +28,12 @@ export const metadata: Metadata = {
     shortcut: "/favicon.ico",
     apple: "/favicon.ico",
   },
-    generator: 'v0.dev'
-}
+};
 
 export default function RootLayout({
   children,
 }: {
-  children: React.ReactNode
+  children: React.ReactNode;
 }) {
   return (
     <html lang="en" suppressHydrationWarning>
@@ -40,14 +41,23 @@ export default function RootLayout({
         <link rel="icon" href="/favicon.ico" />
         <link rel="shortcut icon" href="/favicon.ico" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <script defer data-domain="deradar.derad.network" src="https://data.derad.org/js/script.file-downloads.hash.outbound-links.pageview-props.tagged-events.js"></script>
+        <script
+          defer
+          data-domain="deradar.derad.network"
+          src="https://data.derad.org/js/script.file-downloads.hash.outbound-links.pageview-props.tagged-events.js"
+        ></script>
       </head>
       <body className={inter.className} suppressHydrationWarning>
-        <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false} disableTransitionOnChange>
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="dark"
+          enableSystem={false}
+          disableTransitionOnChange
+        >
           {children}
           <Toaster />
         </ThemeProvider>
       </body>
     </html>
-  )
+  );
 }
