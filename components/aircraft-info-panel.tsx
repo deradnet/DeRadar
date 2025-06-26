@@ -9,15 +9,19 @@ import type { SelectedFlight, AircraftImage } from "@/types/aircraft"
 import { fetchAircraftImage } from "@/utils/planespotters-api"
 import { motion, AnimatePresence } from "framer-motion"
 import { CountryFlag } from "@/components/country-flag"
+import { getAirlineFromCallsign, type Airline } from "@/lib/airline-lookup"
 
 interface AircraftInfoPanelProps {
   selectedFlight: SelectedFlight
   onClose: () => void
+  openedFrom?: "map" | "list"
 }
 
-export function AircraftInfoPanel({ selectedFlight, onClose }: AircraftInfoPanelProps) {
+export function AircraftInfoPanel({ selectedFlight, onClose, openedFrom = "map" }: AircraftInfoPanelProps) {
   const [aircraftImage, setAircraftImage] = useState<AircraftImage | null>(null)
   const [isLoadingImage, setIsLoadingImage] = useState(false)
+  const [airline, setAirline] = useState<Airline | null>(null)
+  const [isLoadingAirline, setIsLoadingAirline] = useState(false)
 
   useEffect(() => {
     const loadImage = async () => {
@@ -30,23 +34,95 @@ export function AircraftInfoPanel({ selectedFlight, onClose }: AircraftInfoPanel
     loadImage()
   }, [selectedFlight])
 
+  useEffect(() => {
+    const loadAirline = async () => {
+      if (!selectedFlight.callsign) {
+        setAirline(null)
+        return
+      }
+
+      setIsLoadingAirline(true)
+      try {
+        const airlineData = await getAirlineFromCallsign(selectedFlight.callsign)
+        setAirline(airlineData)
+      } catch (error) {
+        console.error("Error loading airline data:", error)
+        setAirline(null)
+      } finally {
+        setIsLoadingAirline(false)
+      }
+    }
+
+    loadAirline()
+  }, [selectedFlight.callsign])
+
+  // Determine positioning based on where it was opened from
+  const getPositionClasses = () => {
+    if (openedFrom === "list") {
+      // Mobile: bottom sheet style, Desktop: right side
+      return "fixed bottom-0 left-0 right-0 sm:bottom-auto sm:top-4 sm:right-4 sm:left-auto sm:w-80 z-[10000]"
+    } else {
+      // When opened from map, use the original positioning
+      return "absolute top-4 left-4 right-4 sm:right-auto sm:w-80 z-[10000]"
+    }
+  }
+
+  const getCardClasses = () => {
+    if (openedFrom === "list") {
+      // Mobile: rounded top corners only, Desktop: normal rounded
+      return "bg-slate-900/95 border-slate-700/50 backdrop-blur-xl shadow-2xl max-h-[85vh] sm:max-h-[80vh] overflow-hidden rounded-t-2xl sm:rounded-lg border-b-0 sm:border-b"
+    } else {
+      return "bg-slate-900/95 border-slate-700/50 backdrop-blur-xl shadow-2xl max-h-[85vh] sm:max-h-[80vh] overflow-hidden rounded-lg"
+    }
+  }
+
+  const getAnimationProps = () => {
+    if (openedFrom === "list") {
+      return {
+        initial: { opacity: 0, y: "100%", scale: 1 },
+        animate: { opacity: 1, y: 0, scale: 1 },
+        exit: { opacity: 0, y: "100%", scale: 1 },
+      }
+    } else {
+      return {
+        initial: { opacity: 0, x: -100, scale: 0.9 },
+        animate: { opacity: 1, x: 0, scale: 1 },
+        exit: { opacity: 0, x: -100, scale: 0.9 },
+      }
+    }
+  }
+
   return (
     <AnimatePresence>
       <motion.div
-        initial={{ opacity: 0, x: -100, scale: 0.9 }}
-        animate={{ opacity: 1, x: 0, scale: 1 }}
-        exit={{ opacity: 0, x: -100, scale: 0.9 }}
+        {...getAnimationProps()}
         transition={{ duration: 0.3, ease: "easeOut" }}
-        className="absolute top-4 left-4 right-4 sm:right-auto sm:w-80 z-[10000]"
+        className={`${getPositionClasses()} max-w-[100vw] sm:max-w-[90vw]`}
         style={{ zIndex: 10000 }}
       >
-        <Card className="bg-slate-900/95 border-slate-700/50 backdrop-blur-xl shadow-2xl">
+        {/* Backdrop for mobile when opened from list */}
+        {openedFrom === "list" && (
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm sm:hidden -z-10" onClick={onClose} />
+        )}
+
+        <Card className={getCardClasses()}>
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
               <CardTitle className="text-lg text-white flex items-center gap-2">
                 <Plane className="w-5 h-5 text-blue-400" />
                 <CountryFlag icao={selectedFlight.hex} size="sm" />
-                {selectedFlight.callsign}
+                <span className="truncate">{selectedFlight.callsign}</span>
+                {/* Airline Logo in Header */}
+                {airline && airline.IATA && (
+                  <img
+                    src={`/airlines/${airline.IATA}.png`}
+                    alt={airline.Name}
+                    className="w-8 h-6 object-contain ml-1"
+                    onError={(e) => {
+                      e.currentTarget.style.display = "none"
+                    }}
+                  />
+                )}
               </CardTitle>
               <Button
                 size="sm"
@@ -57,8 +133,14 @@ export function AircraftInfoPanel({ selectedFlight, onClose }: AircraftInfoPanel
                 <X className="w-4 h-4" />
               </Button>
             </div>
+            {/* Mobile drag indicator */}
+            {openedFrom === "list" && (
+              <div className="flex justify-center sm:hidden -mt-2 mb-2">
+                <div className="w-8 h-1 bg-slate-600 rounded-full"></div>
+              </div>
+            )}
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="space-y-4 max-h-[calc(85vh-5rem)] sm:max-h-[calc(80vh-4rem)] overflow-y-auto overscroll-contain touch-pan-y pb-6 sm:pb-4">
             {/* Aircraft Image */}
             <div className="relative">
               {isLoadingImage ? (
@@ -97,6 +179,78 @@ export function AircraftInfoPanel({ selectedFlight, onClose }: AircraftInfoPanel
                 </div>
               ) : null}
             </div>
+
+            {/* Airline Information */}
+            {selectedFlight.callsign && (
+              <div className="space-y-2">
+                <div className="text-slate-400 text-sm font-medium">Flight Information</div>
+                <div className="bg-slate-800/30 rounded-lg p-3 space-y-2">
+                  {isLoadingAirline ? (
+                    <div className="flex items-center justify-between">
+                      <span className="text-slate-400 text-sm">Airline</span>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                    </div>
+                  ) : airline ? (
+                    <>
+                      <div className="flex items-center justify-between">
+                        <span className="text-slate-400 text-sm">Airline</span>
+                        <div className="text-right flex items-center gap-2">
+                          <div>
+                            <div className="font-medium text-white">{airline.Alias || airline.Name}</div>
+                            <div className="text-xs text-slate-400">{airline.Country}</div>
+                          </div>
+                          {/* Large Airline Logo */}
+                          {airline.IATA && (
+                            <img
+                              src={`https://airline-logo-api.derad.org/${airline.IATA}.png`}
+                              alt={airline.Name}
+                              className="w-12 h-8 object-contain"
+                              onError={(e) => {
+                                e.currentTarget.style.display = "none"
+                              }}
+                            />
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between">
+                        <span className="text-slate-400 text-sm">Codes</span>
+                        <div className="flex gap-2">
+                          {airline.ICAO && (
+                            <Badge
+                              variant="secondary"
+                              className="bg-blue-500/20 text-blue-300 border-blue-500/30 text-xs"
+                            >
+                              {airline.ICAO}
+                            </Badge>
+                          )}
+                          {airline.IATA && (
+                            <Badge
+                              variant="secondary"
+                              className="bg-green-500/20 text-green-300 border-green-500/30 text-xs"
+                            >
+                              {airline.IATA}
+                            </Badge>
+                          )}
+                        </div>
+                      </div>
+
+                      {airline.Callsign && (
+                        <div className="flex items-center justify-between">
+                          <span className="text-slate-400 text-sm">Radio Callsign</span>
+                          <span className="font-medium text-white text-sm">{airline.Callsign}</span>
+                        </div>
+                      )}
+                    </>
+                  ) : selectedFlight.callsign ? (
+                    <div className="flex items-center justify-between">
+                      <span className="text-slate-400 text-sm">Airline</span>
+                      <span className="text-slate-500 text-sm">Unknown</span>
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+            )}
 
             {/* Flight Details */}
             <div className="grid grid-cols-2 gap-3 text-sm">
