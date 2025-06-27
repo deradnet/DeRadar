@@ -47,7 +47,7 @@ const SETTINGS_CONFIG = {
 
 const defaultSettings: UserSettings = {
   mapStyle: "dark",
-  showTrails: true,
+  showTrails: false, // high cpu usage when enabled
   trailLength: SETTINGS_CONFIG.aircraft.trail.defaultLength,
   showAltitudeLabels: false,
   showSpeedLabels: false,

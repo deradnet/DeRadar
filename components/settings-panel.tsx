@@ -63,7 +63,7 @@ export interface UserSettings {
 
 const defaultSettings: UserSettings = {
   mapStyle: "dark",
-  showTrails: true,
+  showTrails: false, // high cpu usage when enabled
   trailLength: 20,
   showAltitudeLabels: false,
   showSpeedLabels: false,
@@ -320,7 +320,7 @@ export function SettingsPanel({
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex items-center justify-between">
-            <label className="text-sm text-slate-300">Show Aircraft Trails</label>
+            <label className="text-sm text-slate-300">Show All Aircraft Trails - may be laggy</label>
             <Switch
               checked={localSettings.showTrails}
               onCheckedChange={(checked) => updateSetting("showTrails", checked)}

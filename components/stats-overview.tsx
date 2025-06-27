@@ -1,5 +1,49 @@
+"use client"
+
 import { Card, CardContent } from "@/components/ui/card"
 import { Globe, Activity, AlertTriangle, Signal } from "lucide-react"
+import { useEffect, useState, useRef } from "react"
+
+function AnimatedCounter({ value, duration = 800 }: { value: number; duration?: number }) {
+  const [displayValue, setDisplayValue] = useState(value)
+  const [isAnimating, setIsAnimating] = useState(false)
+  const previousValue = useRef(value)
+
+  useEffect(() => {
+    if (previousValue.current !== value) {
+      setIsAnimating(true)
+      const startValue = previousValue.current
+      const endValue = value
+      const startTime = Date.now()
+
+      const animate = () => {
+        const elapsed = Date.now() - startTime
+        const progress = Math.min(elapsed / duration, 1)
+
+        // Easing function for smooth animation
+        const easeOutQuart = 1 - Math.pow(1 - progress, 4)
+
+        const currentValue = Math.round(startValue + (endValue - startValue) * easeOutQuart)
+        setDisplayValue(currentValue)
+
+        if (progress < 1) {
+          requestAnimationFrame(animate)
+        } else {
+          setIsAnimating(false)
+          previousValue.current = value
+        }
+      }
+
+      requestAnimationFrame(animate)
+    }
+  }, [value, duration])
+
+  return (
+    <span className={`transition-all duration-200 ${isAnimating ? "scale-110 text-blue-300" : ""}`}>
+      {displayValue}
+    </span>
+  )
+}
 
 interface StatsOverviewProps {
   totalAircraft: number
@@ -31,7 +75,9 @@ export function StatsOverview({
               <Globe className={iconClass("w-5 h-5 sm:w-6 sm:h-6 text-blue-400")} />
             </div>
             <div>
-              <div className={textClass("text-xl sm:text-3xl font-bold text-white")}>{totalAircraft}</div>
+              <div className={textClass("text-xl sm:text-3xl font-bold text-white")}>
+                <AnimatedCounter value={totalAircraft} />
+              </div>
               <div className={textClass("text-sm sm:text-base text-slate-400")}>Total Aircraft</div>
             </div>
           </div>
@@ -45,7 +91,9 @@ export function StatsOverview({
               <Activity className={iconClass("w-5 h-5 sm:w-6 sm:h-6 text-green-400")} />
             </div>
             <div>
-              <div className={textClass("text-xl sm:text-3xl font-bold text-white")}>{visibleAircraft}</div>
+              <div className={textClass("text-xl sm:text-3xl font-bold text-white")}>
+                <AnimatedCounter value={visibleAircraft} />
+              </div>
               <div className={textClass("text-sm sm:text-base text-slate-400")}>With Location</div>
             </div>
           </div>
@@ -59,7 +107,9 @@ export function StatsOverview({
               <AlertTriangle className={iconClass("w-5 h-5 sm:w-6 sm:h-6 text-red-400")} />
             </div>
             <div>
-              <div className={textClass("text-xl sm:text-3xl font-bold text-white")}>{emergencyCount}</div>
+              <div className={textClass("text-xl sm:text-3xl font-bold text-white")}>
+                <AnimatedCounter value={emergencyCount} />
+              </div>
               <div className={textClass("text-sm sm:text-base text-slate-400")}>Emergencies</div>
             </div>
           </div>
@@ -73,7 +123,9 @@ export function StatsOverview({
               <Signal className={iconClass("w-5 h-5 sm:w-6 sm:h-6 text-purple-400")} />
             </div>
             <div>
-              <div className={textClass("text-xl sm:text-3xl font-bold text-white")}>{activeSignals}</div>
+              <div className={textClass("text-xl sm:text-3xl font-bold text-white")}>
+                <AnimatedCounter value={activeSignals} />
+              </div>
               <div className={textClass("text-sm sm:text-base text-slate-400")}>
                 Active Signals
                 <div className="text-xs text-slate-500">{messageRate} msg/s avg</div>

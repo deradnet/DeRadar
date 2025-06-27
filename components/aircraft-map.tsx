@@ -28,11 +28,11 @@ const MAP_CONFIG = {
     },
     satellite: {
       url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
-      attribution: "", 
+      attribution: "",
     },
     terrain: {
       url: "https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png",
-      attribution: "", 
+      attribution: "",
     },
   },
   aircraft: {
@@ -166,6 +166,7 @@ export function AircraftMap({
       }
     } catch (error) {
       console.error("Failed to refresh cloud data:", error)
+      return null
     }
   }
 
@@ -401,14 +402,77 @@ export function AircraftMap({
   useEffect(() => {
     if (!isClient) return
 
-    if (window.map && aircraft.length > 0) {
-      const bounds = window.map.getBounds()
-      if (bounds) {
-        const visible = aircraft.filter((a) => {
-          if (!a.lat || !a.lon) return false
-          return bounds.contains([a.lat, a.lon])
-        }).length
-        setVisibleAircraft(visible)
+    const updateVisibleCount = () => {
+      if (window.map) {
+        // Use a small delay to ensure map bounds are updated after zoom/pan
+        setTimeout(() => {
+          const bounds = window.map.getBounds()
+          if (bounds) {
+            // Use the current flight data that's actually being displayed
+            const currentData = window.currentFlightData || aircraft
+            const visible = currentData.filter((a) => {
+              if (!a.lat || !a.lon) return false
+              return bounds.contains([a.lat, a.lon])
+            }).length
+            setVisibleAircraft(visible)
+            console.log(`Visible aircraft updated: ${visible} out of ${currentData.length}`)
+          } else {
+            setVisibleAircraft(0)
+          }
+        }, 100) // Small delay to ensure bounds are updated
+      } else {
+        setVisibleAircraft(0)
+      }
+    }
+
+    updateVisibleCount()
+
+
+    if (window.map) {
+      const handleMapEvent = () => {
+        updateVisibleCount()
+      }
+
+      window.map.on("moveend", handleMapEvent)
+      window.map.on("zoomend", handleMapEvent)
+      window.map.on("viewreset", handleMapEvent)
+
+      return () => {
+        if (window.map) {
+          window.map.off("moveend", handleMapEvent)
+          window.map.off("zoomend", handleMapEvent)
+          window.map.off("viewreset", handleMapEvent)
+        }
+      }
+    }
+  }, [aircraft, isClient])
+
+  useEffect(() => {
+    if (!isClient) return
+
+    window.updateVisibleAircraftCount = () => {
+      if (window.map) {
+        setTimeout(() => {
+          const bounds = window.map.getBounds()
+          if (bounds) {
+            const currentData = window.currentFlightData || aircraft
+            const visible = currentData.filter((a) => {
+              if (!a.lat || !a.lon) return false
+              return bounds.contains([a.lat, a.lon])
+            }).length
+            setVisibleAircraft(visible)
+          } else {
+            setVisibleAircraft(0)
+          }
+        }, 150)
+      } else {
+        setVisibleAircraft(0)
+      }
+    }
+
+    return () => {
+      if (window.updateVisibleAircraftCount) {
+        delete window.updateVisibleAircraftCount
       }
     }
   }, [aircraft, isClient])
@@ -446,7 +510,7 @@ export function AircraftMap({
     } else {
       // If permission is prompt or unknown, request permission
       const confirmed = window.confirm(
-        "DeRadar will access your location to show nearby aircraft. Your location data is processed entirely locally on your device and is never sent to any server or third party. Do you want to continue?",
+        "This app will access your location to show nearby aircraft. Your location data is processed entirely locally on your device and is never sent to any server or third party. Do you want to continue?",
       )
 
       if (confirmed) {
@@ -661,6 +725,15 @@ export function AircraftMap({
                   .addTo(mapInstance)
                   .bindPopup(popupContent, {
                     className: "custom-popup",
+                    closeButton: false,
+                    autoClose: false,
+                    closeOnClick: false,
+                  })
+                  .on("mouseover", function () {
+                    this.openPopup()
+                  })
+                  .on("mouseout", function () {
+                    this.closePopup()
                   })
                   .on("click", () => {
                     const flightData: SelectedFlight = {
@@ -715,7 +788,15 @@ export function AircraftMap({
             }
           })
 
+          // At the end of the updateMarkers function, add:
           console.log(`Updated ${markersArray.length} markers with current settings`)
+
+          // Update visible aircraft count after markers are updated
+          if (window.updateVisibleAircraftCount) {
+            setTimeout(() => {
+              window.updateVisibleAircraftCount()
+            }, 200)
+          }
         }
 
         // Store update function globally
@@ -1141,7 +1222,7 @@ export function AircraftMap({
                   </div>
                   <div className="flex items-center gap-1">
                     <Radar className="w-4 h-4 text-blue-400" />
-                    <span>{visibleAircraft || aircraft.length} Aircraft in Frame</span>
+                    <span>{visibleAircraft} Aircraft in Frame</span>
                   </div>
                   {userLocation && !isPlaybackMode && (
                     <div className="flex items-center gap-1">

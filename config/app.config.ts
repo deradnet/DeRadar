@@ -19,7 +19,7 @@ export const APP_CONFIG = {
   // Application Info
   app: {
     name: "DeRadar",
-    version: "1.0.0",
+    version: "1.1.0",
     description: "Decentralized Radar: Real-time and historical aircraft tracking, powered by Ar.io & Arweave.",
     author: "Derad Network",
     contact: "info@derad.net",

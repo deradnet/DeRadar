@@ -1,9 +1,29 @@
-import { Globe, Mail, Radar, Github, Satellite, Zap } from "lucide-react"
-import { APP_CONFIG } from "@/config/app.config" // Import APP_CONFIG
+"use client"
+
+import { Globe, Mail, Radar, Github, Satellite, Zap, Star } from "lucide-react"
+import { APP_CONFIG } from "@/config/app.config"
+import { useState, useEffect } from "react"
 
 export function Footer() {
   const currentYear = new Date().getFullYear()
-  const appVersion = APP_CONFIG.app.version // Get app version. use this method for now..
+  const appVersion = APP_CONFIG.app.version
+
+  const [starCount, setStarCount] = useState<number | string>("Loading...")
+
+  useEffect(() => {
+    const repo = "deradnet/deradar"
+    const url = `https://api.github.com/repos/${repo}`
+
+    fetch(url)
+      .then((response) => response.json())
+      .then((data) => {
+        setStarCount(data.stargazers_count || "Error")
+      })
+      .catch((error) => {
+        console.error("Error fetching star count:", error)
+        setStarCount("Error")
+      })
+  }, [])
 
   return (
     <footer className="bg-slate-950/50 border-t border-slate-800/50 backdrop-blur-xl mt-12">
@@ -47,6 +67,10 @@ export function Footer() {
                 >
                   Source Code
                 </a>
+                <div className="flex items-center gap-1 text-slate-400">
+                  <Star className="w-3 h-3" />
+                  <span className="text-xs">{starCount}</span>
+                </div>
               </div>
             </div>
           </div>
@@ -77,7 +101,7 @@ export function Footer() {
               </li>
               <li>
                 <a
-                  href="https://derad.net/?ref=DeRadar"
+                  href="https://derad.net/?=deradar"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-slate-400 hover:text-white transition-colors"
@@ -128,6 +152,10 @@ export function Footer() {
                 >
                   Source Code
                 </a>
+                <div className="flex items-center gap-1 text-slate-400">
+                  <Star className="w-3 h-3" />
+                  <span className="text-xs">{starCount}</span>
+                </div>
               </div>
             </div>
           </div>
@@ -158,7 +186,7 @@ export function Footer() {
               </li>
               <li>
                 <a
-                  href="https://derad.network/?ref=DeRadar"
+                  href="https://derad.net/?=deradar"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-slate-400 hover:text-white transition-colors"
@@ -202,3 +230,4 @@ export function Footer() {
     </footer>
   )
 }
+
