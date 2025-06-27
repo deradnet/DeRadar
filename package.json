@@ -7,7 +7,7 @@
     "dev": "next dev",
     "lint": "next lint",
     "start": "next start",
-    "deploy": "npm run build && permaweb-deploy --deploy-folder ./out --arns-name deradnetwork"
+    "deploy": "npm run build && permaweb-deploy --deploy-folder ./out --arns-name deradar"
   },
   "dependencies": {
     "@ardrive/turbo-sdk": "latest",
