@@ -18,7 +18,7 @@ const PLAYBACK_CONFIG = {
     historical: {
       graphqlUrl: "https://derad.network/graphql",
       dataUrl: "https://derad.network",
-      owner: "Vpu86GpNgl3H7yAPUzl8XvxdQmu3VPqJMsItF29SRB4",
+      owner: "iB6QxoeJJZUzavEGmO3azESuqfb0kdHePujYsIx_kVQ",
       appName: "DeradNetworkBackup",
       timeout: 15000,
       retries: 3,
