@@ -1,6 +1,5 @@
 /**
- * Smart Ar.io Gateway Domain Resolution Utility with Fallback
- * Auto-detects gateway domain from current hostname with fallback to derad.network
+ * Smart Ar.io Gateway Domain Resolution Utility with Session-Level Caching
  */
 
 interface DomainTestResult {
@@ -9,37 +8,95 @@ interface DomainTestResult {
   available: boolean
 }
 
+interface SessionCache {
+  gatewayDomain?: string
+  resolvedGraphQLUrl?: string
+  resolvedDataUrl?: string
+  testResults?: {
+    graphql: DomainTestResult
+    data: DomainTestResult
+  }
+  decision?: "gateway" | "fallback"
+  timestamp?: number
+}
+
+// Session-level cache - persists until page reload/close
+let sessionCache: SessionCache = {}
+
 /**
- * Extract gateway domain from current hostname
- * Rules:
- * - example.com → example.com
- * - map.example.com → example.com
- * - Gateway domain is everything after the first subdomain
+ * Extract gateway domain from current hostname - ONCE per session
  */
-export function extractGatewayDomain(hostname?: string): string {
-  // Use current hostname if not provided
-  const currentHostname = hostname || (typeof window !== "undefined" ? window.location.hostname : "localhost")
-
-  console.log(`🔍 Extracting gateway domain from: ${currentHostname}`)
-
-  // Split hostname into parts
-  const parts = currentHostname.split(".")
-
-  // If only domain (no subdomains), return as-is
-  if (parts.length <= 2) {
-    console.log(`✅ Root domain detected: ${currentHostname}`)
-    return currentHostname
+function extractGatewayDomainOnce(): string {
+  // Return cached result if already extracted
+  if (sessionCache.gatewayDomain) {
+    console.log(`📋 Using cached gateway domain: ${sessionCache.gatewayDomain}`)
+    return sessionCache.gatewayDomain
   }
 
-  // Remove first subdomain, keep the rest as gateway domain
-  const gatewayDomain = parts.slice(1).join(".")
-  console.log(`✅ Gateway domain extracted: ${gatewayDomain}`)
+  const currentHostname = typeof window !== "undefined" ? window.location.hostname : "localhost"
+  console.log(`🔍 Extracting gateway domain from: ${currentHostname} (ONCE)`)
+
+  const parts = currentHostname.split(".")
+
+  let gatewayDomain: string
+  if (parts.length <= 2) {
+    gatewayDomain = currentHostname
+    console.log(`✅ Root domain detected: ${gatewayDomain}`)
+  } else {
+    gatewayDomain = parts.slice(1).join(".")
+    console.log(`✅ Gateway domain extracted: ${gatewayDomain}`)
+  }
+
+  // Cache the result for the entire session
+  sessionCache.gatewayDomain = gatewayDomain
+  sessionCache.timestamp = Date.now()
 
   return gatewayDomain
 }
 
+
+function isArIoDomain(domain: string): boolean {
+  return domain.endsWith(".ar.io") || domain === "ar.io"
+}
+
 /**
- * Test domain availability and response time for GraphQL endpoint
+ * Test domain availability - ONCE per session
+ */
+async function testDomainOnce(domain: string): Promise<{ graphql: DomainTestResult; data: DomainTestResult }> {
+  // Return cached results if already tested
+  if (sessionCache.testResults) {
+    console.log(`📋 Using cached test results for: ${domain}`)
+    return sessionCache.testResults
+  }
+
+  console.log(`🧪 Testing domain: ${domain} (ONCE)`)
+
+ 
+  if (isArIoDomain(domain)) {
+    console.log(`⏭️ Skipping: ${domain}`)
+    const failedResult = { domain, responseTime: 0, available: false }
+    const results = { graphql: failedResult, data: failedResult }
+    sessionCache.testResults = results
+    return results
+  }
+
+  // Test both endpoints in parallel
+  const [graphqlResult, dataResult] = await Promise.all([testGraphQLEndpoint(domain), testDataEndpoint(domain)])
+
+  const results = { graphql: graphqlResult, data: dataResult }
+
+  // Cache the results for the entire session
+  sessionCache.testResults = results
+
+  console.log(`✅ Test completed and cached for session:`)
+  console.log(`   GraphQL: ${graphqlResult.available ? "✅" : "❌"} (${graphqlResult.responseTime}ms)`)
+  console.log(`   Data: ${dataResult.available ? "✅" : "❌"} (${dataResult.responseTime}ms)`)
+
+  return results
+}
+
+/**
+ * Test GraphQL endpoint
  */
 async function testGraphQLEndpoint(domain: string, timeout = 5000): Promise<DomainTestResult> {
   const startTime = Date.now()
@@ -48,7 +105,6 @@ async function testGraphQLEndpoint(domain: string, timeout = 5000): Promise<Doma
     const controller = new AbortController()
     const timeoutId = setTimeout(() => controller.abort(), timeout)
 
-    // Test with GraphQL endpoint
     const response = await fetch(`https://${domain}/graphql`, {
       method: "POST",
       headers: {
@@ -78,7 +134,7 @@ async function testGraphQLEndpoint(domain: string, timeout = 5000): Promise<Doma
 }
 
 /**
- * Test domain availability for data endpoint
+ * Test data endpoint
  */
 async function testDataEndpoint(domain: string, timeout = 5000): Promise<DomainTestResult> {
   const startTime = Date.now()
@@ -87,7 +143,6 @@ async function testDataEndpoint(domain: string, timeout = 5000): Promise<DomainT
     const controller = new AbortController()
     const timeoutId = setTimeout(() => controller.abort(), timeout)
 
-    // Test with a simple HEAD request to check if domain responds
     const response = await fetch(`https://${domain}`, {
       method: "HEAD",
       signal: controller.signal,
@@ -99,7 +154,7 @@ async function testDataEndpoint(domain: string, timeout = 5000): Promise<DomainT
     return {
       domain,
       responseTime,
-      available: response.ok || response.status < 500, // Accept redirects and client errors, but not server errors
+      available: response.ok || response.status < 500,
     }
   } catch (error) {
     return {
@@ -110,13 +165,41 @@ async function testDataEndpoint(domain: string, timeout = 5000): Promise<DomainT
   }
 }
 
-/**
- * Resolve GraphQL URL with smart gateway substitution and fallback
- * - If URL contains "gateway" → replace with auto-detected gateway domain
- * - Test if GraphQL endpoint is available
- * - If not available, fallback to derad.network
- * - If URL contains specific domain → use that domain as-is
- */
+async function makeDecisionOnce(): Promise<"gateway" | "fallback"> {
+  // Return cached decision if already made
+  if (sessionCache.decision) {
+    console.log(`📋 Using cached decision: ${sessionCache.decision}`)
+    return sessionCache.decision
+  }
+
+  console.log(`🎯 Making URL resolution decision (ONCE)`)
+
+  const gatewayDomain = extractGatewayDomainOnce()
+
+  // If ar.io domain, immediately decide fallback
+  if (isArIoDomain(gatewayDomain)) {
+    console.log(`⚡ Decision: fallback (ar.io domain)`)
+    sessionCache.decision = "fallback"
+    return "fallback"
+  }
+
+  // Test the domain once
+  const testResults = await testDomainOnce(gatewayDomain)
+
+  // Make decision based on test results
+  const decision = testResults.graphql.available && testResults.data.available ? "gateway" : "fallback"
+
+  console.log(
+    `⚡ Decision: ${decision} (GraphQL: ${testResults.graphql.available}, Data: ${testResults.data.available})`,
+  )
+
+  // Cache the decision for the entire session
+  sessionCache.decision = decision
+
+  return decision
+}
+
+
 export async function resolveGraphQLUrl(url: string): Promise<string> {
   // If URL doesn't contain "gateway", return as-is
   if (!url.includes("gateway")) {
@@ -124,32 +207,34 @@ export async function resolveGraphQLUrl(url: string): Promise<string> {
     return url
   }
 
-  // Auto-detect gateway domain from current hostname
-  const gatewayDomain = extractGatewayDomain()
-  const resolvedUrl = url.replace(/gateway/g, gatewayDomain)
-
-  console.log(`🎯 Testing GraphQL URL: ${resolvedUrl}`)
-
-  // Test if the resolved gateway has GraphQL endpoint
-  const testResult = await testGraphQLEndpoint(gatewayDomain, 5000)
-
-  if (testResult.available) {
-    console.log(`✅ GraphQL endpoint available on ${gatewayDomain} (${testResult.responseTime}ms)`)
-    return resolvedUrl
-  } else {
-    console.log(`❌ GraphQL endpoint not available on ${gatewayDomain}, falling back to derad.network`)
-    const fallbackUrl = url.replace(/gateway/g, "derad.network")
-    console.log(`🔄 Fallback GraphQL URL: ${fallbackUrl}`)
-    return fallbackUrl
+  // Return cached URL if already resolved
+  if (sessionCache.resolvedGraphQLUrl) {
+    console.log(`📋 Using cached GraphQL URL: ${sessionCache.resolvedGraphQLUrl}`)
+    return sessionCache.resolvedGraphQLUrl
   }
+
+  console.log(`🎯 Resolving GraphQL URL (ONCE): ${url}`)
+
+  const decision = await makeDecisionOnce()
+
+  let resolvedUrl: string
+  if (decision === "gateway") {
+    const gatewayDomain = extractGatewayDomainOnce()
+    resolvedUrl = url.replace(/gateway/g, gatewayDomain)
+    console.log(`✅ Using gateway: ${resolvedUrl}`)
+  } else {
+    resolvedUrl = url.replace(/gateway/g, "derad.network")
+    console.log(`🔄 Using fallback: ${resolvedUrl}`)
+  }
+
+  // Cache the resolved URL for the entire session
+  sessionCache.resolvedGraphQLUrl = resolvedUrl
+
+  return resolvedUrl
 }
 
 /**
- * Resolve Data URL with smart gateway substitution and fallback
- * - If URL contains "gateway" → replace with auto-detected gateway domain
- * - Test if data endpoint is available
- * - If not available, fallback to derad.network
- * - If URL contains specific domain → use that domain as-is
+ * Resolve Data URL - uses cached decision
  */
 export async function resolveDataUrl(url: string): Promise<string> {
   // If URL doesn't contain "gateway", return as-is
@@ -158,43 +243,47 @@ export async function resolveDataUrl(url: string): Promise<string> {
     return url
   }
 
-  // Auto-detect gateway domain from current hostname
-  const gatewayDomain = extractGatewayDomain()
-  const resolvedUrl = url.replace(/gateway/g, gatewayDomain)
-
-  console.log(`🎯 Testing data URL: ${resolvedUrl}`)
-
-  // Test if the resolved gateway has data endpoint
-  const testResult = await testDataEndpoint(gatewayDomain, 5000)
-
-  if (testResult.available) {
-    console.log(`✅ Data endpoint available on ${gatewayDomain} (${testResult.responseTime}ms)`)
-    return resolvedUrl
-  } else {
-    console.log(`❌ Data endpoint not available on ${gatewayDomain}, falling back to derad.network`)
-    const fallbackUrl = url.replace(/gateway/g, "derad.network")
-    console.log(`🔄 Fallback data URL: ${fallbackUrl}`)
-    return fallbackUrl
+  // Return cached URL if already resolved
+  if (sessionCache.resolvedDataUrl) {
+    console.log(`📋 Using cached data URL: ${sessionCache.resolvedDataUrl}`)
+    return sessionCache.resolvedDataUrl
   }
+
+  console.log(`🎯 Resolving data URL (ONCE): ${url}`)
+
+  const decision = await makeDecisionOnce()
+
+  let resolvedUrl: string
+  if (decision === "gateway") {
+    const gatewayDomain = extractGatewayDomainOnce()
+    resolvedUrl = url.replace(/gateway/g, gatewayDomain)
+    console.log(`✅ Using gateway: ${resolvedUrl}`)
+  } else {
+    resolvedUrl = url.replace(/gateway/g, "derad.network")
+    console.log(`🔄 Using fallback: ${resolvedUrl}`)
+  }
+
+  // Cache the resolved URL for the entire session
+  sessionCache.resolvedDataUrl = resolvedUrl
+
+  return resolvedUrl
 }
 
 /**
- * Legacy resolve URL function - now uses GraphQL resolver by default
- * @deprecated Use resolveGraphQLUrl or resolveDataUrl instead
+ * Legacy resolve URL function
  */
 export async function resolveUrl(url: string): Promise<string> {
   return await resolveGraphQLUrl(url)
 }
 
 /**
- * Batch resolve multiple URLs with smart fallback
+ * Batch resolve multiple URLs
  */
 export async function resolveUrls(urls: Record<string, string>): Promise<Record<string, string>> {
   const resolved: Record<string, string> = {}
 
   for (const [key, url] of Object.entries(urls)) {
     if (url.includes("gateway")) {
-      // Determine if this is a GraphQL or data URL based on the key or URL content
       if (key.toLowerCase().includes("graphql") || url.includes("/graphql")) {
         resolved[key] = await resolveGraphQLUrl(url)
       } else {
@@ -211,126 +300,77 @@ export async function resolveUrls(urls: Record<string, string>): Promise<Record<
 }
 
 /**
- * Get current gateway domain info
+ * Get current session info
  */
 export function getGatewayInfo(): {
   currentHostname: string
-  gatewayDomain: string
+  gatewayDomain: string | undefined
   isSubdomain: boolean
   subdomainLevel: number
+  isArIo: boolean
+  decision: "gateway" | "fallback" | "pending"
+  resolvedUrls: {
+    graphql?: string
+    data?: string
+  }
+  sessionAge: number
+  cached: boolean
 } {
   const currentHostname = typeof window !== "undefined" ? window.location.hostname : "localhost"
-  const gatewayDomain = extractGatewayDomain(currentHostname)
   const parts = currentHostname.split(".")
+  const gatewayDomain = sessionCache.gatewayDomain
 
   return {
     currentHostname,
     gatewayDomain,
     isSubdomain: parts.length > 2,
     subdomainLevel: Math.max(0, parts.length - 2),
+    isArIo: gatewayDomain ? isArIoDomain(gatewayDomain) : false,
+    decision: sessionCache.decision || "pending",
+    resolvedUrls: {
+      graphql: sessionCache.resolvedGraphQLUrl,
+      data: sessionCache.resolvedDataUrl,
+    },
+    sessionAge: sessionCache.timestamp ? Date.now() - sessionCache.timestamp : 0,
+    cached: !!sessionCache.gatewayDomain,
   }
 }
 
 /**
- * Test gateway availability for both GraphQL and data endpoints
+ * Get session cache status
  */
-export async function testGatewayAvailability(domain?: string): Promise<{
-  domain: string
-  graphql: DomainTestResult
-  data: DomainTestResult
-  overall: boolean
-}> {
-  const gatewayDomain = domain || extractGatewayDomain()
-  console.log(`🧪 Testing gateway availability: ${gatewayDomain}`)
-
-  const [graphqlResult, dataResult] = await Promise.all([
-    testGraphQLEndpoint(gatewayDomain),
-    testDataEndpoint(gatewayDomain),
-  ])
-
-  return {
-    domain: gatewayDomain,
-    graphql: graphqlResult,
-    data: dataResult,
-    overall: graphqlResult.available && dataResult.available,
+export function getSessionStatus(): {
+  extracted: boolean
+  tested: boolean
+  decided: boolean
+  resolved: {
+    graphql: boolean
+    data: boolean
   }
-}
-
-/**
- * Get gateway status with detailed info and fallback recommendations
- */
-export async function getGatewayStatus(): Promise<{
-  info: ReturnType<typeof getGatewayInfo>
-  availability: Awaited<ReturnType<typeof testGatewayAvailability>>
-  resolvedUrls: {
-    graphql: string
-    data: string
-  }
-  recommendations: string[]
-}> {
-  const info = getGatewayInfo()
-  const availability = await testGatewayAvailability()
-
-  const resolvedUrls = {
-    graphql: await resolveGraphQLUrl("https://gateway/graphql"),
-    data: await resolveDataUrl("https://gateway"),
-  }
-
-  const recommendations: string[] = []
-
-  if (!availability.graphql.available) {
-    recommendations.push("GraphQL endpoint not available - using derad.network fallback")
-  }
-
-  if (!availability.data.available) {
-    recommendations.push("Data endpoint not available - using derad.network fallback")
-  }
-
-  if (availability.overall) {
-    recommendations.push("All endpoints available - using detected gateway")
-  }
-
-  return {
-    info,
-    availability,
-    resolvedUrls,
-    recommendations,
-  }
-}
-
-/**
- * Validate gateway domain format
- */
-export function validateGatewayDomain(domain: string): {
-  isValid: boolean
-  issues: string[]
+  cache: SessionCache
 } {
-  const issues: string[] = []
-
-  // Check basic format
-  if (!domain || domain.trim() === "") {
-    issues.push("Domain is empty")
-  }
-
-  // Check for valid domain format
-  const domainRegex = /^[a-zA-Z0-9][a-zA-Z0-9-]{0,61}[a-zA-Z0-9]?(\.[a-zA-Z0-9][a-zA-Z0-9-]{0,61}[a-zA-Z0-9]?)*$/
-  if (!domainRegex.test(domain)) {
-    issues.push("Invalid domain format")
-  }
-
-  // Check for localhost or IP (might be development)
-  if (domain === "localhost" || /^\d+\.\d+\.\d+\.\d+$/.test(domain)) {
-    issues.push("Using localhost or IP address (development mode?)")
-  }
-
   return {
-    isValid: issues.length === 0,
-    issues,
+    extracted: !!sessionCache.gatewayDomain,
+    tested: !!sessionCache.testResults,
+    decided: !!sessionCache.decision,
+    resolved: {
+      graphql: !!sessionCache.resolvedGraphQLUrl,
+      data: !!sessionCache.resolvedDataUrl,
+    },
+    cache: { ...sessionCache },
   }
 }
 
 /**
- * Debug gateway resolution with fallback testing
+ * Clear session cache (for testing only)
+ */
+export function clearSessionCache(): void {
+  sessionCache = {}
+  console.log("🧹 Cleared session cache")
+}
+
+/**
+ * Debug session-based resolution
  */
 export async function debugGatewayResolution(): Promise<void> {
   if (typeof window === "undefined") {
@@ -339,48 +379,43 @@ export async function debugGatewayResolution(): Promise<void> {
   }
 
   const info = getGatewayInfo()
+  const status = getSessionStatus()
 
-  console.group("🔍 Gateway Resolution Debug")
+  console.group("🔍 Session-Based Gateway Resolution Debug")
   console.log("Current hostname:", info.currentHostname)
-  console.log("Gateway domain:", info.gatewayDomain)
-  console.log("Is subdomain:", info.isSubdomain)
-  console.log("Subdomain level:", info.subdomainLevel)
+  console.log("Session age:", `${Math.round(info.sessionAge / 1000)}s`)
+  console.log("Cache status:", {
+    extracted: status.extracted,
+    tested: status.tested,
+    decided: status.decided,
+    resolved: status.resolved,
+  })
 
-  // Test URL resolution with fallback
-  const testUrls = [
-    { url: "https://gateway/graphql", type: "GraphQL" },
-    { url: "https://gateway", type: "Data" },
-    { url: "https://specific-domain.com/api", type: "Specific" },
-  ]
-
-  console.log("\n📋 URL Resolution Test with Fallback:")
-  for (const { url, type } of testUrls) {
-    if (type === "GraphQL") {
-      const resolved = await resolveGraphQLUrl(url)
-      console.log(`${url} → ${resolved}`)
-    } else if (type === "Data") {
-      const resolved = await resolveDataUrl(url)
-      console.log(`${url} → ${resolved}`)
-    } else {
-      console.log(`${url} → ${url} (unchanged)`)
-    }
+  if (info.gatewayDomain) {
+    console.log("Gateway domain:", info.gatewayDomain)
+    console.log("Is ar.io:", info.isArIo)
+    console.log("Decision:", info.decision)
   }
 
-  // Test gateway availability
-  console.log("\n🧪 Gateway Availability Test:")
-  const availability = await testGatewayAvailability()
-  console.log("GraphQL available:", availability.graphql.available, `(${availability.graphql.responseTime}ms)`)
-  console.log("Data available:", availability.data.available, `(${availability.data.responseTime}ms)`)
-  console.log("Overall status:", availability.overall ? "✅ Available" : "❌ Fallback required")
+  if (info.resolvedUrls.graphql || info.resolvedUrls.data) {
+    console.log("Resolved URLs:", info.resolvedUrls)
+  }
 
+  // Test resolution (will use cache if available)
+  console.log("\n📋 URL Resolution Test:")
+  const graphqlUrl = await resolveGraphQLUrl("https://gateway/graphql")
+  const dataUrl = await resolveDataUrl("https://gateway")
+  console.log(`GraphQL: https://gateway/graphql → ${graphqlUrl}`)
+  console.log(`Data: https://gateway → ${dataUrl}`)
+
+  console.log("\n📊 Final Session Cache:", status.cache)
   console.groupEnd()
 }
 
 // Legacy exports for backward compatibility
-export const resolveGatewayDomain = extractGatewayDomain
-export const findBestGateway = extractGatewayDomain
-export const resolveArIOGateway = extractGatewayDomain
-export const smartResolveArIOGateway = extractGatewayDomain
-
-// Legacy testDomain function
+export const extractGatewayDomain = extractGatewayDomainOnce
+export const resolveGatewayDomain = extractGatewayDomainOnce
+export const findBestGateway = extractGatewayDomainOnce
+export const resolveArIOGateway = extractGatewayDomainOnce
+export const smartResolveArIOGateway = extractGatewayDomainOnce
 export const testDomain = testGraphQLEndpoint

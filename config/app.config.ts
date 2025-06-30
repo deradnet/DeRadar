@@ -43,7 +43,7 @@ export const APP_CONFIG = {
   api: {
     // Live aircraft data
     aircraft: {
-      baseUrl: "https://antenna-1.derad.org/data/aircraft.json",
+      baseUrl: "https://antenna-1.derad.org/aircraft.json",
       corsProxy: "https://corsproxy.io/?url=", // Alternative: "https://api.allorigins.win/raw?url=" (can be used when cors problems happening)
       timeout: 10000, // 10 seconds
       retries: 3,
@@ -57,7 +57,7 @@ export const APP_CONFIG = {
     historical: {
       graphqlUrl: "https://gateway/graphql", // Auto-detects gateway, falls back to derad.network
       dataUrl: "https://gateway", // Auto-detects gateway, falls back to derad.network
-      owner: "Vpu86GpNgl3H7yAPUzl8XvxdQmu3VPqJMsItF29SRB4",
+      owner: "iB6QxoeJJZUzavEGmO3azESuqfb0kdHePujYsIx_kVQ",
       appName: "DeradNetworkBackup",
       timeout: 15000,
       retries: 3,
