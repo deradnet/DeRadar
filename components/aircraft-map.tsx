@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useRef, useState, useMemo, useCallback } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { MapPin, Activity, Radar, Navigation, Plane, NavigationOff } from "lucide-react"
@@ -116,6 +116,83 @@ export function AircraftMap({
   useEffect(() => {
     setIsClient(true)
   }, [])
+
+  // Memoized callback for handling refresh
+  const handleRefresh = useCallback(() => {
+    if (!isClient) return
+    if (window.updateMapMarkers) {
+      window.updateMapMarkers()
+    }
+  }, [isClient])
+
+  // Memoized callback for toggling fullscreen
+  const toggleFullscreen = useCallback(() => {
+    if (!isClient) return
+    const newFullscreenState = !isFullscreen
+    setIsFullscreen(newFullscreenState)
+    if (onFullscreenChange) {
+      onFullscreenChange(newFullscreenState)
+    }
+
+    // Force map resize after fullscreen toggle to prevent marker disappearance
+    // The issue: invalidateSize() triggers movestart/moveend which sets isUserInteracting=true,
+    // causing updateMarkers to skip. Solution: Force update after interaction clears.
+    setTimeout(() => {
+      if (window.map) {
+        window.map.invalidateSize({ pan: false })
+      }
+    }, 50)
+
+    // Wait for moveend event to fire and interaction flag to clear (500ms + buffer)
+    setTimeout(() => {
+      if (window.map) {
+        window.map.invalidateSize({ pan: false })
+        // Force immediate update by clearing interaction state and bypassing throttle
+        if ((window as any).forceUpdateMarkers) {
+          (window as any).forceUpdateMarkers()
+        }
+      }
+    }, 600)
+  }, [isClient, isFullscreen, onFullscreenChange])
+
+  // Memoized callback for handling aircraft selection
+  const handleAircraftSelect = useCallback((aircraft: NearestAircraft) => {
+    if (!isClient) return
+
+    const registration = aircraft.r || registration_from_hexid(aircraft.hex)
+
+    const flightData: SelectedFlight = {
+      id: aircraft.hex,
+      callsign: aircraft.flight ? aircraft.flight.trim() : aircraft.hex,
+      aircraft: aircraft.t || aircraft.category || "Unknown",
+      altitude: aircraft.alt_baro || 0,
+      speed: Math.round(aircraft.gs || 0),
+      heading: Math.round(aircraft.track || 0),
+      lat: aircraft.lat || 0,
+      lng: aircraft.lon || 0,
+      squawk: aircraft.squawk || "N/A",
+      status: aircraft.emergency && aircraft.emergency !== "none" ? "Emergency" : "En Route",
+      registration: registration,
+      hex: aircraft.hex,
+      type: aircraft.t || aircraft.category || "Unknown",
+    }
+
+    // Store globally before React state update
+    window.currentSelectedFlight = flightData
+
+    setSelectedFlight(flightData)
+    setShowAircraftPanel(true)
+
+    // Center map on selected aircraft
+    if (window.map && aircraft.lat && aircraft.lon) {
+      window.map.setView([aircraft.lat, aircraft.lon], Math.max(window.map.getZoom(), 10))
+    }
+
+    // Force immediate map update to show selection
+    if (window.updateMapMarkers) {
+      setTimeout(() => window.updateMapMarkers(), 50)
+    }
+  }, [isClient])
 
   // RainViewer helper function
   const getRainviewerLayers = async (key: string) => {
@@ -398,14 +475,20 @@ export function AircraftMap({
     }
   }, [userLocation, aircraft, isClient])
 
-  // Add this useEffect to calculate visible aircraft in current map frame
+  // Add this useEffect to calculate visible aircraft in current map frame with debouncing
   useEffect(() => {
     if (!isClient) return
 
+    let updateTimeout: NodeJS.Timeout | null = null
+
     const updateVisibleCount = () => {
-      if (window.map) {
-        // Use a small delay to ensure map bounds are updated after zoom/pan
-        setTimeout(() => {
+      // Debounce to prevent excessive calculations
+      if (updateTimeout) {
+        clearTimeout(updateTimeout)
+      }
+
+      updateTimeout = setTimeout(() => {
+        if (window.map) {
           const bounds = window.map.getBounds()
           if (bounds) {
             // Use the current flight data that's actually being displayed
@@ -415,18 +498,16 @@ export function AircraftMap({
               return bounds.contains([a.lat, a.lon])
             }).length
             setVisibleAircraft(visible)
-            console.log(`Visible aircraft updated: ${visible} out of ${currentData.length}`)
           } else {
             setVisibleAircraft(0)
           }
-        }, 100) // Small delay to ensure bounds are updated
-      } else {
-        setVisibleAircraft(0)
-      }
+        } else {
+          setVisibleAircraft(0)
+        }
+      }, 150) // Debounced delay
     }
 
     updateVisibleCount()
-
 
     if (window.map) {
       const handleMapEvent = () => {
@@ -438,6 +519,9 @@ export function AircraftMap({
       window.map.on("viewreset", handleMapEvent)
 
       return () => {
+        if (updateTimeout) {
+          clearTimeout(updateTimeout)
+        }
         if (window.map) {
           window.map.off("moveend", handleMapEvent)
           window.map.off("zoomend", handleMapEvent)
@@ -477,17 +561,7 @@ export function AircraftMap({
     }
   }, [aircraft, isClient])
 
-  const toggleFullscreen = () => {
-    if (!isClient) return
-
-    const newFullscreenState = !isFullscreen
-    setIsFullscreen(newFullscreenState)
-    if (onFullscreenChange) {
-      onFullscreenChange(newFullscreenState)
-    }
-  }
-
-  const handleLocationRequest = () => {
+  const handleLocationRequest = useCallback(() => {
     if (!isClient) return
 
     if (!enableLocation) {
@@ -517,9 +591,9 @@ export function AircraftMap({
         getCurrentLocation()
       }
     }
-  }
+  }, [isClient, enableLocation, locationPermission])
 
-  const handleLocationDisable = () => {
+  const handleLocationDisable = useCallback(() => {
     if (!isClient) return
 
     setUserLocation(null)
@@ -528,7 +602,7 @@ export function AircraftMap({
       window.map.removeLayer(window.userMarker)
       window.userMarker = null
     }
-  }
+  }, [isClient])
 
   useEffect(() => {
     if (!isClient) return
@@ -565,6 +639,11 @@ export function AircraftMap({
         // Load Leaflet dynamically
         const L = await import("leaflet")
 
+        // Load marker cluster plugin
+        await import("leaflet.markercluster")
+        require("leaflet.markercluster/dist/MarkerCluster.css")
+        require("leaflet.markercluster/dist/MarkerCluster.Default.css")
+
         // Initialize map with config values
         mapInstance = L.default.map(mapRef.current, {
           center: [MAP_CONFIG.defaultCenter.lat, MAP_CONFIG.defaultCenter.lng],
@@ -592,32 +671,116 @@ export function AircraftMap({
         window.L = L.default
         window.mapMarkers = markersArray
         window.mapTrails = trailsArray
+        window.markerClusterGroup = null // Clustering disabled per user preference
 
-        // Update markers function
+        // Track markers by aircraft hex for differential updates
+        if (!window.aircraftMarkersMap) window.aircraftMarkersMap = new Map()
+        if (!window.aircraftLabelsMap) window.aircraftLabelsMap = new Map()
+
+        // Icon cache to avoid regenerating identical icons (with size limit to prevent memory bloat)
+        if (!window.iconCache) {
+          window.iconCache = new Map()
+          window.iconCacheMaxSize = 500 // Limit cache to 500 icons
+        }
+
+        // Create persistent layer groups for batch operations
+        if (!window.markerLayerGroup) {
+          window.markerLayerGroup = L.default.layerGroup().addTo(mapInstance)
+        }
+        if (!window.labelLayerGroup) {
+          window.labelLayerGroup = L.default.layerGroup().addTo(mapInstance)
+        }
+
+        // Update markers function with differential updates
+        // PERFORMANCE OPTIMIZATIONS:
+        // 1. Differential updates: Only update markers that changed position/state
+        // 2. Icon caching: Reuse SVG icons to avoid regeneration
+        // 3. Viewport filtering: Only render aircraft in visible map bounds + buffer
+        // 4. Optimized trails: Only redraw trails when position changes
+        // 5. Memory management: Clean up departed aircraft from all tracking maps
+        // 6. Throttled updates: Prevent update spam with requestAnimationFrame
+        // 7. Batch DOM operations: Minimize reflows and repaints
+
+        let updatePending = false
+        let lastUpdateTime = 0
+        const MIN_UPDATE_INTERVAL = 1000 // 1 second updates 
+
+        // Pause updates during user interaction (panning/zooming)
+        let isUserInteracting = false
+        let interactionTimeout: NodeJS.Timeout | null = null
+
+        // Track map interaction events
+        mapInstance.on('movestart zoomstart', () => {
+          isUserInteracting = true
+          if (interactionTimeout) clearTimeout(interactionTimeout)
+        })
+
+        mapInstance.on('moveend zoomend', () => {
+          // Resume updates 500ms after interaction ends
+          if (interactionTimeout) clearTimeout(interactionTimeout)
+          interactionTimeout = setTimeout(() => {
+            isUserInteracting = false
+            updateMarkers() // Immediate update after interaction
+          }, 500)
+        })
+
         const updateMarkers = () => {
+          // Skip updates during user interaction for butter-smooth panning/zooming
+          if (isUserInteracting) {
+            return
+          }
+
+          // Throttle updates to prevent overwhelming the browser
+          const now = Date.now()
+          if (now - lastUpdateTime < MIN_UPDATE_INTERVAL) {
+            if (!updatePending) {
+              updatePending = true
+              setTimeout(() => {
+                updatePending = false
+                updateMarkers()
+              }, MIN_UPDATE_INTERVAL - (now - lastUpdateTime))
+            }
+            return
+          }
+          lastUpdateTime = now
+
           console.log("Updating markers with settings:", window.currentSettings || settings)
 
           // Get current settings
           const currentSettings = window.currentSettings || settings || {}
 
-          // Clear existing markers
-          markersArray.forEach((marker) => {
-            if (mapInstance) {
-              mapInstance.removeLayer(marker)
-            }
-          })
-          markersArray.length = 0
-
-          // Clear existing trails
-          trailsArray.forEach((trail) => {
-            if (mapInstance) {
-              mapInstance.removeLayer(trail)
-            }
-          })
-          trailsArray.length = 0
-
-          // Add aircraft markers
+          // Get current aircraft data
           const currentData = window.currentFlightData || aircraft
+          const currentDataMap = new Map(currentData.map((a: Aircraft) => [a.hex, a]))
+
+          // Track which aircraft are still present in the new data
+          const stillPresent = new Set<string>()
+
+          // Track existing trails by aircraft hex for differential updates
+          if (!window.aircraftTrailsMap) window.aircraftTrailsMap = new Map()
+
+          // Batch arrays for DOM operations to minimize reflows
+          const markersToAdd: any[] = []
+          const markersToRemove: any[] = []
+
+          // Instead of clearing ALL trails, we'll selectively update them per aircraft
+
+          // Get current map bounds for viewport filtering
+          const mapBounds = mapInstance.getBounds()
+          const bufferFactor = 0.3 // 30% buffer around visible area
+          let boundsWithBuffer = null
+
+          if (mapBounds) {
+            const latDiff = mapBounds.getNorth() - mapBounds.getSouth()
+            const lngDiff = mapBounds.getEast() - mapBounds.getWest()
+
+            boundsWithBuffer = {
+              north: mapBounds.getNorth() + (latDiff * bufferFactor),
+              south: mapBounds.getSouth() - (latDiff * bufferFactor),
+              east: mapBounds.getEast() + (lngDiff * bufferFactor),
+              west: mapBounds.getWest() - (lngDiff * bufferFactor),
+            }
+          }
 
           currentData.forEach((flight: Aircraft) => {
             const lat = flight.lat
@@ -634,11 +797,63 @@ export function AircraftMap({
               lon <= 180 &&
               mapInstance
             ) {
-              // Get current selected flight from global state
+              // Viewport filtering: Skip aircraft outside visible bounds + buffer
+              // BUT always render selected aircraft regardless of viewport
               const currentSelectedFlight = window.currentSelectedFlight
               const isSelected = currentSelectedFlight?.id === flight.hex
 
-              // Update aircraft trail
+              // Always mark aircraft as present (even if outside viewport)
+              stillPresent.add(flight.hex)
+
+              if (!isSelected && boundsWithBuffer) {
+                const isInBounds = lat >= boundsWithBuffer.south &&
+                                   lat <= boundsWithBuffer.north &&
+                                   lon >= boundsWithBuffer.west &&
+                                   lon <= boundsWithBuffer.east
+
+                if (!isInBounds) {
+                  // Aircraft is outside viewport, skip rendering but keep trail data
+                  // Remove marker if it exists (aircraft moved out of view)
+                  const existingMarker = window.aircraftMarkersMap.get(flight.hex)
+                  if (existingMarker) {
+                    if (window.markerClusterGroup) {
+                      window.markerClusterGroup.removeLayer(existingMarker.marker)
+                    } else {
+                      mapInstance.removeLayer(existingMarker.marker)
+                    }
+                    window.aircraftMarkersMap.delete(flight.hex)
+
+                    // Remove labels
+                    const labels = window.aircraftLabelsMap.get(flight.hex)
+                    if (labels) {
+                      labels.forEach((label: any) => mapInstance.removeLayer(label))
+                      window.aircraftLabelsMap.delete(flight.hex)
+                    }
+                  }
+
+                  // BUT still update trail data for this aircraft (so when selected, trail exists)
+                  const trailKey = flight.hex
+                  if (!window.aircraftTrails) window.aircraftTrails = {}
+                  if (!window.aircraftTrails[trailKey]) {
+                    window.aircraftTrails[trailKey] = []
+                  }
+
+                  const lastPos = window.aircraftTrails[trailKey][window.aircraftTrails[trailKey].length - 1]
+                  const posChanged = !lastPos || lastPos[0] !== lat || lastPos[1] !== lon
+
+                  if (posChanged) {
+                    window.aircraftTrails[trailKey].push([lat, lon])
+                    const trailLength = Math.min(currentSettings.trailLength || MAP_CONFIG.aircraft.trail.defaultLength, 30)
+                    if (window.aircraftTrails[trailKey].length > trailLength) {
+                      window.aircraftTrails[trailKey] = window.aircraftTrails[trailKey].slice(-trailLength)
+                    }
+                  }
+
+                  return // Skip rendering this aircraft (but trail data is preserved)
+                }
+              }
+
+              // Update aircraft trail (only for visible or selected aircraft)
               const trailKey = flight.hex
               if (!window.aircraftTrails) window.aircraftTrails = {}
 
@@ -647,143 +862,328 @@ export function AircraftMap({
               }
 
               // Add current position to trail
-              window.aircraftTrails[trailKey].push([lat, lon])
+              const lastPos = window.aircraftTrails[trailKey][window.aircraftTrails[trailKey].length - 1]
+              const posChanged = !lastPos || lastPos[0] !== lat || lastPos[1] !== lon
 
-              // Keep only last N positions for trail based on settings
-              const trailLength = currentSettings.trailLength || MAP_CONFIG.aircraft.trail.defaultLength
-              if (window.aircraftTrails[trailKey].length > trailLength) {
-                window.aircraftTrails[trailKey] = window.aircraftTrails[trailKey].slice(-trailLength)
+              if (posChanged) {
+                window.aircraftTrails[trailKey].push([lat, lon])
+
+                // Keep only last N positions for trail based on settings
+               
+                const trailLength = Math.min(currentSettings.trailLength || MAP_CONFIG.aircraft.trail.defaultLength, 30)
+                if (window.aircraftTrails[trailKey].length > trailLength) {
+                  window.aircraftTrails[trailKey] = window.aircraftTrails[trailKey].slice(-trailLength)
+                }
               }
 
               // Draw trail if enabled OR if aircraft is selected
-              if ((currentSettings.showTrails === true || isSelected) && window.aircraftTrails[trailKey].length > 2) {
-                const trailColor =
-                  flight.emergency && flight.emergency !== "none"
-                    ? MAP_CONFIG.aircraft.trail.colors.emergency
-                    : MAP_CONFIG.aircraft.trail.colors.normal
-                const trail = L.default
-                  .polyline(window.aircraftTrails[trailKey], {
-                    color: trailColor,
-                    weight: 2,
-                    opacity: 0.6,
-                    smoothFactor: 1,
-                  })
-                  .addTo(mapInstance)
-                trailsArray.push(trail)
+             
+              const MAX_TRAILS = 100 // Only show trails for 100 aircraft max
+              const aircraftTrailsMap = window.aircraftTrailsMap || new Map()
+              const currentTrailCount = aircraftTrailsMap.size
+              const shouldShowTrail = (currentSettings.showTrails === true || isSelected) &&
+                                      window.aircraftTrails[trailKey].length > 2 &&
+                                      (isSelected || currentTrailCount < MAX_TRAILS)
+
+              const existingTrail = aircraftTrailsMap.get(trailKey)
+
+              if (shouldShowTrail) {
+                // Remove old trail if it exists and position changed
+                if (existingTrail && posChanged) {
+                  mapInstance.removeLayer(existingTrail)
+                  window.aircraftTrailsMap.delete(trailKey)
+                }
+
+                // Create new trail only if position changed or trail doesn't exist
+                if (!existingTrail || posChanged) {
+                  const trailColor =
+                    flight.emergency && flight.emergency !== "none"
+                      ? MAP_CONFIG.aircraft.trail.colors.emergency
+                      : MAP_CONFIG.aircraft.trail.colors.normal
+                  const trail = L.default
+                    .polyline(window.aircraftTrails[trailKey], {
+                      color: trailColor,
+                      weight: 2,
+                      opacity: 0.6,
+                      smoothFactor: 2, // Increased from 1 for better performance (less precision, faster rendering)
+                    })
+                    .addTo(mapInstance)
+
+                  window.aircraftTrailsMap.set(trailKey, trail)
+                  trailsArray.push(trail)
+                } else if (existingTrail) {
+                  // Trail hasn't changed, keep existing one
+                  trailsArray.push(existingTrail)
+                }
+              } else if (existingTrail) {
+                // Trail should not be shown, remove it
+                mapInstance.removeLayer(existingTrail)
+                window.aircraftTrailsMap.delete(trailKey)
               }
 
               try {
-                // Get icon size from settings
-                const iconSize = currentSettings.aircraftIconSize || MAP_CONFIG.aircraft.icon.defaultSize
+                // Check if marker already exists for this aircraft
+                const existingMarker = window.aircraftMarkersMap.get(flight.hex)
 
-                // Create custom aircraft icon
-                const aircraftIcon = L.default.divIcon({
-                  className: "aircraft-marker",
-                  html: createAircraftIcon(flight, isSelected),
-                  iconSize: [iconSize, iconSize],
-                  iconAnchor: [iconSize / 2, iconSize / 2],
-                })
+                // Get icon size from settings with adaptive quality based on zoom
+                const currentZoom = mapInstance.getZoom()
+                let iconSize = currentSettings.aircraftIconSize || MAP_CONFIG.aircraft.icon.defaultSize
 
-                // Get registration for display
-                const registration = flight.r || registration_from_hexid(flight.hex)
+                // ADAPTIVE QUALITY: Reduce icon size when zoomed out for better performance
+                if (currentZoom < 7) {
+                  iconSize = Math.max(iconSize * 0.6, 16) // 40% smaller at world view
+                } else if (currentZoom < 9) {
+                  iconSize = Math.max(iconSize * 0.8, 20) // 20% smaller at regional view
+                }
 
-                // Create popup content with altitude/speed labels if enabled
-                const { country } = getCountryFromICAO(flight.hex)
-                const popupContent = `
-                  <div style="color: #fff; background: #1e293b; padding: 12px; border-radius: 6px; min-width: 220px; font-family: system-ui;">
-                    <div style="font-weight: bold; margin-bottom: 8px; font-size: 14px; display: flex; align-items: center; gap: 8px;">
-                      <img src="/flags/${flight.hex ? getCountryFromICAO(flight.hex).countryCode?.toUpperCase() || "XX" : "XX"}.svg" 
-                           style="width: 16px; height: 12px; object-fit: cover; border-radius: 2px;" 
-                           onerror="this.style.display='none'" />
-                      ${flight.flight ? flight.flight.trim() : registration || flight.hex}
-                    </div>
-                    <div style="margin-bottom: 6px;">
-                      <span style="color: #94a3b8;">Country:</span> <span style="color: #fff; font-weight: 500;">${country}</span>
-                    </div>
-                    <div style="margin-bottom: 6px;">
-                      <span style="color: #94a3b8;">Altitude:</span> <span style="color: #fff; font-weight: 500;">${flight.alt_baro ? flight.alt_baro.toLocaleString() + " ft" : "N/A"}</span>
-                    </div>
-                    <div style="margin-bottom: 6px;">
-                      <span style="color: #94a3b8;">Speed:</span> <span style="color: #fff; font-weight: 500;">${flight.gs ? Math.round(flight.gs) + " kts" : "N/A"}</span>
-                    </div>
-                    <div style="margin-bottom: 6px;">
-                      <span style="color: #94a3b8;">Squawk:</span> <span style="color: #fff; font-weight: 500;">${flight.squawk || "N/A"}</span>
-                    </div>
-                    <div style="margin-bottom: 6px;">
-                      <span style="color: #94a3b8;">Track:</span> <span style="color: #fff; font-weight: 500;">${flight.track ? Math.round(flight.track) + "°" : "N/A"}</span>
-                    </div>
-                    ${registration ? `<div style="margin-bottom: 6px;"><span style="color: #94a3b8;">Registration:</span> <span style="color: #10b981; font-weight: 500;">${registration}</span></div>` : ""}
-                    <div style="margin-bottom: 6px;">
-                      <span style="color: #94a3b8;">Type:</span> <span style="color: #fff; font-weight: 500;">${flight.t || flight.category || "N/A"}</span>
-                    </div>
-                    ${flight.emergency && flight.emergency !== "none" ? `<div style="color: #ef4444; font-weight: bold; margin-top: 8px; padding: 4px 8px; background: rgba(239, 68, 68, 0.1); border-radius: 4px;">⚠️ Emergency: ${flight.emergency}</div>` : ""}
-                  </div>
-                `
+                // Create cache key for icon (include zoom tier for adaptive sizing)
+                const zoomTier = currentZoom < 7 ? 'low' : currentZoom < 9 ? 'med' : 'high'
+                const iconCacheKey = `${flight.hex}_${isSelected}_${flight.emergency}_${flight.track || 0}_${zoomTier}`
 
-                const marker = L.default
-                  .marker([lat, lon], { icon: aircraftIcon })
-                  .addTo(mapInstance)
-                  .bindPopup(popupContent, {
-                    className: "custom-popup",
-                    closeButton: false,
-                    autoClose: false,
-                    closeOnClick: false,
-                  })
-                  .on("mouseover", function () {
-                    this.openPopup()
-                  })
-                  .on("mouseout", function () {
-                    this.closePopup()
-                  })
-                  .on("click", () => {
-                    const flightData: SelectedFlight = {
-                      id: flight.hex,
-                      callsign: flight.flight ? flight.flight.trim() : flight.hex,
-                      aircraft: flight.t || flight.category || "Unknown",
-                      altitude: flight.alt_baro || 0,
-                      speed: Math.round(flight.gs || 0),
-                      heading: Math.round(flight.track || 0),
-                      lat: lat,
-                      lng: lon,
-                      squawk: flight.squawk || "N/A",
-                      status: flight.emergency && flight.emergency !== "none" ? "Emergency" : "En Route",
-                      registration: registration,
-                      hex: flight.hex,
-                      type: flight.t || flight.category || "Unknown",
+                // Check what type of update is needed
+                const positionChanged = existingMarker && (existingMarker.data.lat !== lat || existingMarker.data.lon !== lon)
+                const onlyPositionChanged = existingMarker &&
+                  positionChanged &&
+                  existingMarker.data.isSelected === isSelected &&
+                  existingMarker.data.emergency === flight.emergency &&
+                  existingMarker.data.track === flight.track
+
+                // OPTIMIZATION: If only position changed, just update marker position without recreation
+                if (onlyPositionChanged) {
+                  existingMarker.marker.setLatLng([lat, lon])
+                  existingMarker.data.lat = lat
+                  existingMarker.data.lon = lon
+                  markersArray.push(existingMarker.marker)
+                } else if (!existingMarker || positionChanged ||
+                          existingMarker.data.isSelected !== isSelected ||
+                          existingMarker.data.emergency !== flight.emergency ||
+                          existingMarker.data.track !== flight.track) {
+                  // Full recreation needed (state/heading/selection changed or doesn't exist)
+                  // Remove old marker if it exists
+                  if (existingMarker) {
+                    if (window.markerClusterGroup) {
+                      window.markerClusterGroup.removeLayer(existingMarker.marker)
+                    } else {
+                      mapInstance.removeLayer(existingMarker.marker)
                     }
+                  }
 
-                    // Store selected flight globally and trigger React state update
-                    window.currentSelectedFlight = flightData
-                    setSelectedFlight(flightData)
-                    setShowAircraftPanel(true)
+                  // Get or create icon from cache with LRU eviction
+                  let iconHTML = window.iconCache.get(iconCacheKey)
+                  if (!iconHTML) {
+                    iconHTML = createAircraftIcon(flight, isSelected)
+
+                    // Implement simple LRU: if cache is full, delete oldest entry
+                    if (window.iconCache.size >= window.iconCacheMaxSize) {
+                      const firstKey = window.iconCache.keys().next().value
+                      window.iconCache.delete(firstKey)
+                    }
+                    window.iconCache.set(iconCacheKey, iconHTML)
+                  }
+
+                  // Create custom aircraft icon
+                  const aircraftIcon = L.default.divIcon({
+                    className: "aircraft-marker",
+                    html: iconHTML,
+                    iconSize: [iconSize, iconSize],
+                    iconAnchor: [iconSize / 2, iconSize / 2],
                   })
 
-                // Add altitude/speed labels if enabled
-                if (currentSettings.showAltitudeLabels && flight.alt_baro) {
+                  // Create marker without popup initially (lazy load popup on hover)
+                  const marker = L.default
+                    .marker([lat, lon], { icon: aircraftIcon })
+                    .on("mouseover", function () {
+                      // Lazy load popup content only when needed
+                      if (!this.getPopup()) {
+                        const registration = flight.r || registration_from_hexid(flight.hex)
+                        const { country } = getCountryFromICAO(flight.hex)
+                        const popupContent = `
+                          <div style="color: #fff; background: #1e293b; padding: 12px; border-radius: 6px; min-width: 220px; font-family: system-ui;">
+                            <div style="font-weight: bold; margin-bottom: 8px; font-size: 14px; display: flex; align-items: center; gap: 8px;">
+                              <img src="/flags/${flight.hex ? getCountryFromICAO(flight.hex).countryCode?.toUpperCase() || "XX" : "XX"}.svg"
+                                   style="width: 16px; height: 12px; object-fit: cover; border-radius: 2px;"
+                                   onerror="this.style.display='none'" />
+                              ${flight.flight ? flight.flight.trim() : registration || flight.hex}
+                            </div>
+                            <div style="margin-bottom: 6px;">
+                              <span style="color: #94a3b8;">Country:</span> <span style="color: #fff; font-weight: 500;">${country}</span>
+                            </div>
+                            <div style="margin-bottom: 6px;">
+                              <span style="color: #94a3b8;">Altitude:</span> <span style="color: #fff; font-weight: 500;">${flight.alt_baro ? flight.alt_baro.toLocaleString() + " ft" : "N/A"}</span>
+                            </div>
+                            <div style="margin-bottom: 6px;">
+                              <span style="color: #94a3b8;">Speed:</span> <span style="color: #fff; font-weight: 500;">${flight.gs ? Math.round(flight.gs) + " kts" : "N/A"}</span>
+                            </div>
+                            <div style="margin-bottom: 6px;">
+                              <span style="color: #94a3b8;">Squawk:</span> <span style="color: #fff; font-weight: 500;">${flight.squawk || "N/A"}</span>
+                            </div>
+                            <div style="margin-bottom: 6px;">
+                              <span style="color: #94a3b8;">Track:</span> <span style="color: #fff; font-weight: 500;">${flight.track ? Math.round(flight.track) + "°" : "N/A"}</span>
+                            </div>
+                            ${registration ? `<div style="margin-bottom: 6px;"><span style="color: #94a3b8;">Registration:</span> <span style="color: #10b981; font-weight: 500;">${registration}</span></div>` : ""}
+                            <div style="margin-bottom: 6px;">
+                              <span style="color: #94a3b8;">Type:</span> <span style="color: #fff; font-weight: 500;">${flight.t || flight.category || "N/A"}</span>
+                            </div>
+                            ${flight.emergency && flight.emergency !== "none" ? `<div style="color: #ef4444; font-weight: bold; margin-top: 8px; padding: 4px 8px; background: rgba(239, 68, 68, 0.1); border-radius: 4px;">⚠️ Emergency: ${flight.emergency}</div>` : ""}
+                          </div>
+                        `
+                        this.bindPopup(popupContent, {
+                          className: "custom-popup",
+                          closeButton: false,
+                          autoClose: false,
+                          closeOnClick: false,
+                        })
+                      }
+                      this.openPopup()
+                    })
+                    .on("mouseout", function () {
+                      this.closePopup()
+                    })
+                    .on("click", () => {
+                      const flightData: SelectedFlight = {
+                        id: flight.hex,
+                        callsign: flight.flight ? flight.flight.trim() : flight.hex,
+                        aircraft: flight.t || flight.category || "Unknown",
+                        altitude: flight.alt_baro || 0,
+                        speed: Math.round(flight.gs || 0),
+                        heading: Math.round(flight.track || 0),
+                        lat: lat,
+                        lng: lon,
+                        squawk: flight.squawk || "N/A",
+                        status: flight.emergency && flight.emergency !== "none" ? "Emergency" : "En Route",
+                        registration: registration,
+                        hex: flight.hex,
+                        type: flight.t || flight.category || "Unknown",
+                      }
+
+                      // Store selected flight globally and trigger React state update
+                      window.currentSelectedFlight = flightData
+                      setSelectedFlight(flightData)
+                      setShowAircraftPanel(true)
+
+                      // Force immediate map update to show trail for selected aircraft
+                      // Bypass throttle by resetting lastUpdateTime
+                      lastUpdateTime = 0
+                      updateMarkers()
+                    })
+
+                  // Add marker to layer group for batch operations
+                  if (window.markerClusterGroup) {
+                    window.markerClusterGroup.addLayer(marker)
+                  } else if (window.markerLayerGroup) {
+                    window.markerLayerGroup.addLayer(marker)
+                  } else {
+                    marker.addTo(mapInstance)
+                  }
+
+                  // Store marker with metadata for future comparisons
+                  window.aircraftMarkersMap.set(flight.hex, {
+                    marker,
+                    data: {
+                      lat,
+                      lon,
+                      isSelected,
+                      emergency: flight.emergency,
+                      track: flight.track,
+                    }
+                  })
+
+                  markersArray.push(marker)
+                } else if (existingMarker) {
+                  // Marker exists and hasn't changed at all, just reuse it
+                  markersArray.push(existingMarker.marker)
+                }
+
+                // Handle labels (remove old labels for this aircraft if they exist)
+                const existingLabels = window.aircraftLabelsMap.get(flight.hex)
+                if (existingLabels) {
+                  existingLabels.forEach((label: any) => mapInstance.removeLayer(label))
+                  window.aircraftLabelsMap.delete(flight.hex)
+                }
+
+                // OPTIMIZATION: Only render labels for aircraft in immediate viewport (no buffer)
+                // This reduces DOM elements significantly when zoomed out
+                const isInImmediateViewport = mapBounds &&
+                  lat >= mapBounds.getSouth() &&
+                  lat <= mapBounds.getNorth() &&
+                  lon >= mapBounds.getWest() &&
+                  lon <= mapBounds.getEast()
+
+                // Add new labels if enabled AND in immediate viewport
+                const newLabels: any[] = []
+
+                if (isInImmediateViewport && currentSettings.showAltitudeLabels && flight.alt_baro) {
                   const altLabel = L.default.divIcon({
                     className: "altitude-label",
                     html: `<div style="background: rgba(0,0,0,0.7); color: white; padding: 2px 4px; border-radius: 3px; font-size: 10px; white-space: nowrap;">${flight.alt_baro.toLocaleString()}ft</div>`,
                     iconSize: [60, 20],
                     iconAnchor: [30, -5],
                   })
-                  const altMarker = L.default.marker([lat, lon], { icon: altLabel }).addTo(mapInstance)
+                  const altMarker = L.default.marker([lat, lon], { icon: altLabel })
+                  if (window.labelLayerGroup) {
+                    window.labelLayerGroup.addLayer(altMarker)
+                  } else {
+                    altMarker.addTo(mapInstance)
+                  }
                   markersArray.push(altMarker)
+                  newLabels.push(altMarker)
                 }
 
-                if (currentSettings.showSpeedLabels && flight.gs) {
+                if (isInImmediateViewport && currentSettings.showSpeedLabels && flight.gs) {
                   const speedLabel = L.default.divIcon({
                     className: "speed-label",
                     html: `<div style="background: rgba(0,0,0,0.7); color: white; padding: 2px 4px; border-radius: 3px; font-size: 10px; white-space: nowrap;">${Math.round(flight.gs)}kts</div>`,
                     iconSize: [50, 20],
                     iconAnchor: [25, 25],
                   })
-                  const speedMarker = L.default.marker([lat, lon], { icon: speedLabel }).addTo(mapInstance)
+                  const speedMarker = L.default.marker([lat, lon], { icon: speedLabel })
+                  if (window.labelLayerGroup) {
+                    window.labelLayerGroup.addLayer(speedMarker)
+                  } else {
+                    speedMarker.addTo(mapInstance)
+                  }
                   markersArray.push(speedMarker)
+                  newLabels.push(speedMarker)
                 }
 
-                markersArray.push(marker)
+                if (newLabels.length > 0) {
+                  window.aircraftLabelsMap.set(flight.hex, newLabels)
+                }
+
               } catch (error) {
                 console.error(`Error adding marker for aircraft ${flight.hex}:`, error)
+              }
+            }
+          })
+
+          // Remove markers for aircraft that are no longer present
+          window.aircraftMarkersMap.forEach((markerData: any, hex: string) => {
+            if (!stillPresent.has(hex)) {
+              // Remove from cluster group or map
+              if (window.markerClusterGroup) {
+                window.markerClusterGroup.removeLayer(markerData.marker)
+              } else {
+                mapInstance.removeLayer(markerData.marker)
+              }
+              window.aircraftMarkersMap.delete(hex)
+
+              // Also remove labels
+              const labels = window.aircraftLabelsMap.get(hex)
+              if (labels) {
+                labels.forEach((label: any) => mapInstance.removeLayer(label))
+                window.aircraftLabelsMap.delete(hex)
+              }
+
+              // Clean up trail data to prevent memory leaks
+              if (window.aircraftTrails && window.aircraftTrails[hex]) {
+                delete window.aircraftTrails[hex]
+              }
+
+              // Clean up trail polyline
+              const trail = window.aircraftTrailsMap.get(hex)
+              if (trail) {
+                mapInstance.removeLayer(trail)
+                window.aircraftTrailsMap.delete(hex)
               }
             }
           })
@@ -791,16 +1191,33 @@ export function AircraftMap({
           // At the end of the updateMarkers function, add:
           console.log(`Updated ${markersArray.length} markers with current settings`)
 
-          // Update visible aircraft count after markers are updated
-          if (window.updateVisibleAircraftCount) {
-            setTimeout(() => {
+          // Use requestAnimationFrame for smooth visual updates
+          requestAnimationFrame(() => {
+            // Update visible aircraft count after markers are updated
+            if (window.updateVisibleAircraftCount) {
               window.updateVisibleAircraftCount()
-            }, 200)
-          }
+            }
+          })
         }
 
         // Store update function globally
         window.updateMapMarkers = updateMarkers
+
+        // Force update function that bypasses interaction and throttle checks
+        // Used for fullscreen toggle and other critical updates
+        ;(window as any).forceUpdateMarkers = () => {
+          const wasInteracting = isUserInteracting
+
+          // Temporarily disable checks
+          isUserInteracting = false
+          lastUpdateTime = 0
+
+          // Force update
+          updateMarkers()
+
+          // Restore interaction state (lastUpdateTime stays at 0 to allow immediate next update)
+          isUserInteracting = wasInteracting
+        }
 
         // Initial marker update
         updateMarkers()
@@ -973,43 +1390,6 @@ export function AircraftMap({
       }
     }
   }, [isClient])
-
-  const handleRefresh = () => {
-    if (!isClient) return
-
-    if (window.updateMapMarkers) {
-      window.updateMapMarkers()
-    }
-  }
-
-  const handleAircraftSelect = (aircraft: NearestAircraft) => {
-    if (!isClient) return
-
-    const registration = aircraft.r || registration_from_hexid(aircraft.hex)
-
-    const flightData: SelectedFlight = {
-      id: aircraft.hex,
-      callsign: aircraft.flight ? aircraft.flight.trim() : aircraft.hex,
-      aircraft: aircraft.t || aircraft.category || "Unknown",
-      altitude: aircraft.alt_baro || 0,
-      speed: Math.round(aircraft.gs || 0),
-      heading: Math.round(aircraft.track || 0),
-      lat: aircraft.lat || 0,
-      lng: aircraft.lon || 0,
-      squawk: aircraft.squawk || "N/A",
-      status: aircraft.emergency && aircraft.emergency !== "none" ? "Emergency" : "En Route",
-      registration: registration,
-      hex: aircraft.hex,
-      type: aircraft.t || aircraft.category || "Unknown",
-    }
-    setSelectedFlight(flightData)
-    setShowAircraftPanel(true)
-
-    // Center map on selected aircraft
-    if (window.map && aircraft.lat && aircraft.lon) {
-      window.map.setView([aircraft.lat, aircraft.lon], Math.max(window.map.getZoom(), 10))
-    }
-  }
 
   // Show loading state during SSR
   if (!isClient) {

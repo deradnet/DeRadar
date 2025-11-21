@@ -477,3 +477,34 @@
 .group > * {
   transform: translateZ(0);
 }
+
+/* Hardware acceleration for aircraft markers - CRITICAL FOR PERFORMANCE */
+.aircraft-marker {
+  will-change: transform;
+  transform: translateZ(0);
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  perspective: 1000px;
+  -webkit-perspective: 1000px;
+}
+
+/* Hardware acceleration for labels */
+.altitude-label,
+.speed-label {
+  will-change: transform;
+  transform: translateZ(0);
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+
+/* Optimize leaflet marker pane */
+.leaflet-marker-pane {
+  will-change: transform;
+  transform: translateZ(0);
+}
+
+/* Optimize leaflet overlay pane for trails */
+.leaflet-overlay-pane {
+  will-change: transform;
+  transform: translateZ(0);
+}

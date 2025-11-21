@@ -1,5 +1,5 @@
 import type React from "react";
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 
@@ -17,8 +17,6 @@ export const metadata: Metadata = {
   creator: "Derad Network",
   publisher: "Derad Network",
   robots: "index, follow",
-  viewport: "width=device-width, initial-scale=1",
-  themeColor: "#0f172a",
   manifest: "/manifest.json",
   icons: {
     icon: [
@@ -28,6 +26,12 @@ export const metadata: Metadata = {
     shortcut: "/favicon.ico",
     apple: "/favicon.ico",
   },
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  themeColor: "#0f172a",
 };
 
 export default function RootLayout({
