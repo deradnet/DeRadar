@@ -7,10 +7,24 @@
     "dev": "next dev",
     "lint": "next lint",
     "start": "next start",
-    "deploy": "npm run build && permaweb-deploy --deploy-folder ./out --arns-name deradar"
+    "deploy": "npm run build && permaweb-deploy --deploy-folder ./out --arns-name deradar",
+    "cap:build": "npm run build && npx cap sync",
+    "cap:android": "npm run cap:build && npx cap open android",
+    "cap:ios": "npm run cap:build && npx cap open ios",
+    "cap:sync": "npx cap sync",
+    "generate:assets": "npx capacitor-assets generate"
   },
   "dependencies": {
     "@ardrive/turbo-sdk": "latest",
+    "@capacitor/android": "^7.4.4",
+    "@capacitor/app": "^7.1.0",
+    "@capacitor/cli": "^7.4.4",
+    "@capacitor/core": "^7.4.4",
+    "@capacitor/geolocation": "^7.1.5",
+    "@capacitor/haptics": "^7.0.2",
+    "@capacitor/ios": "^7.4.4",
+    "@capacitor/splash-screen": "^7.0.3",
+    "@capacitor/status-bar": "^7.0.3",
     "@emotion/is-prop-valid": "latest",
     "@radix-ui/react-accordion": "latest",
     "@radix-ui/react-alert-dialog": "latest",
@@ -68,6 +82,7 @@
     "vaul": "latest"
   },
   "devDependencies": {
+    "@capacitor/assets": "^3.0.5",
     "@types/leaflet": "^1.9.8",
     "@types/node": "^22",
     "@types/react": "^18",

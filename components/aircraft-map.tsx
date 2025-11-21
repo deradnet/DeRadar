@@ -12,6 +12,7 @@ import { registration_from_hexid } from "@/lib/registration-lookup"
 import { PlaybackControls } from "./playback-controls"
 import { CountryFlag } from "@/components/country-flag"
 import { getCountryFromICAO } from "@/lib/icao-country-lookup"
+import { getCurrentPosition, checkPermissions } from "@/lib/geolocation"
 
 // Static configuration for perma deploy
 const MAP_CONFIG = {
@@ -397,25 +398,16 @@ export function AircraftMap({
         return
       }
 
-      if ("permissions" in navigator) {
-        try {
-          const permission = await navigator.permissions.query({ name: "geolocation" })
-          setLocationPermission(permission.state)
+      try {
+        const permission = await checkPermissions()
+        setLocationPermission(permission)
 
-          // Listen for permission changes
-          permission.onchange = () => {
-            setLocationPermission(permission.state)
-          }
-
-          // If permission is granted, automatically get location
-          if (permission.state === "granted") {
-            getCurrentLocation()
-          }
-        } catch (error) {
-          console.error("Error checking location permission:", error)
-          setLocationPermission("unknown")
+        // If permission is granted, automatically get location
+        if (permission === "granted") {
+          getCurrentLocation()
         }
-      } else {
+      } catch (error) {
+        console.error("Error checking location permission:", error)
         setLocationPermission("unknown")
       }
     }
@@ -424,40 +416,39 @@ export function AircraftMap({
   }, [enableLocation, isClient])
 
   // Function to get current location
-  const getCurrentLocation = () => {
-    if (!isClient || !navigator.geolocation) return
+  const getCurrentLocation = async () => {
+    if (!isClient) return
 
     setIsLocationLoading(true)
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        const { latitude, longitude } = position.coords
-        setUserLocation({ lat: latitude, lng: longitude })
-        setIsLocationLoading(false)
 
-        if (window.map && window.L) {
-          window.map.setView([latitude, longitude], 10)
-          const userIcon = window.L.divIcon({
-            className: "user-location-marker",
-            html: `<div style="color: #10b981; font-size: 16px; text-shadow: 0 0 3px rgba(0,0,0,0.8);"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg></div>`,
-            iconSize: [16, 16],
-            iconAnchor: [8, 8],
-          })
-          if (window.userMarker) {
-            window.map.removeLayer(window.userMarker)
-          }
-          window.userMarker = window.L.marker([latitude, longitude], { icon: userIcon })
-            .addTo(window.map)
-            .bindPopup("Your Location (Local Only)")
+    try {
+      const position = await getCurrentPosition()
+      const { latitude, longitude } = position.coords
+      setUserLocation({ lat: latitude, lng: longitude })
+      setIsLocationLoading(false)
+
+      if (window.map && window.L) {
+        window.map.setView([latitude, longitude], 10)
+        const userIcon = window.L.divIcon({
+          className: "user-location-marker",
+          html: `<div style="color: #10b981; font-size: 16px; text-shadow: 0 0 3px rgba(0,0,0,0.8);"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg></div>`,
+          iconSize: [16, 16],
+          iconAnchor: [8, 8],
+        })
+        if (window.userMarker) {
+          window.map.removeLayer(window.userMarker)
         }
-      },
-      (error) => {
-        setIsLocationLoading(false)
-        console.error("Geolocation error:", error)
-        if (error.code === error.PERMISSION_DENIED) {
-          setLocationPermission("denied")
-        }
-      },
-    )
+        window.userMarker = window.L.marker([latitude, longitude], { icon: userIcon })
+          .addTo(window.map)
+          .bindPopup("Your Location (Local Only)")
+      }
+    } catch (error: any) {
+      setIsLocationLoading(false)
+      console.error("Geolocation error:", error)
+      if (error.code === error.PERMISSION_DENIED || error.code === 1) {
+        setLocationPermission("denied")
+      }
+    }
   }
 
   // Calculate distance between two coordinates using Haversine formula

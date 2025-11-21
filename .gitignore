@@ -20,3 +20,27 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# capacitor
+android/app/build/
+android/app/release/
+android/.gradle/
+android/build/
+android/local.properties
+android/.idea/
+android/*.iml
+android/gradlew
+android/gradlew.bat
+android/gradle/
+
+ios/App/Pods/
+ios/App/build/
+ios/App/App.xcworkspace/xcuserdata/
+ios/App/App.xcodeproj/xcuserdata/
+ios/App/App.xcodeproj/project.xcworkspace/xcuserdata/
+ios/App/*.ipa
+
+# Keep these native files for team collaboration
+!android/app/src/
+!android/app/capacitor.build.gradle
+!ios/App/App/
