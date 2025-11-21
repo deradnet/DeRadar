@@ -134,25 +134,42 @@ export function AircraftMap({
       onFullscreenChange(newFullscreenState)
     }
 
-    // Force map resize after fullscreen toggle to prevent marker disappearance
-    // The issue: invalidateSize() triggers movestart/moveend which sets isUserInteracting=true,
-    // causing updateMarkers to skip. Solution: Force update after interaction clears.
+    // Critical fix for marker disappearance on fullscreen toggle:
+    // Problem: Map bounds become stale during resize, causing viewport filtering to hide all markers
+    // Solution: Temporarily disable viewport filtering, resize map, then force update after stabilization
+    if ((window as any).disableViewportFiltering !== undefined) {
+      (window as any).disableViewportFiltering = true
+    }
+
+    // Stage 1: Initial resize after DOM settles
     setTimeout(() => {
       if (window.map) {
         window.map.invalidateSize({ pan: false })
       }
     }, 50)
 
-    // Wait for moveend event to fire and interaction flag to clear (500ms + buffer)
+    // Stage 2: Second resize to ensure dimensions are correct
     setTimeout(() => {
       if (window.map) {
         window.map.invalidateSize({ pan: false })
-        // Force immediate update by clearing interaction state and bypassing throttle
-        if ((window as any).forceUpdateMarkers) {
-          (window as any).forceUpdateMarkers()
+      }
+    }, 300)
+
+    // Stage 3: Final update after map fully stabilizes (same timing as zoom/pan events)
+    setTimeout(() => {
+      if (window.map) {
+        // Re-enable viewport filtering and force marker update
+        if ((window as any).disableViewportFiltering !== undefined) {
+          (window as any).disableViewportFiltering = false
+        }
+
+        // Force immediate update bypassing interaction check and throttle
+        const forceUpdate = (window as any).forceUpdateMarkers
+        if (forceUpdate && typeof forceUpdate === 'function') {
+          forceUpdate()
         }
       }
-    }, 600)
+    }, 900)
   }, [isClient, isFullscreen, onFullscreenChange])
 
   // Memoized callback for handling aircraft selection
@@ -615,6 +632,42 @@ export function AircraftMap({
     return () => document.removeEventListener("fullscreenchange", handleFullscreenChange)
   }, [isClient])
 
+  // Handle map resize when fullscreen state changes
+  useEffect(() => {
+    if (!isClient || !window.map) return
+
+    // Disable viewport filtering during fullscreen transition
+    ;(window as any).disableViewportFiltering = true
+
+    // Wait for CSS transition to complete, then resize map
+    const timer1 = setTimeout(() => {
+      if (window.map) {
+        window.map.invalidateSize({ pan: false })
+      }
+    }, 100)
+
+    const timer2 = setTimeout(() => {
+      if (window.map) {
+        window.map.invalidateSize({ pan: false })
+      }
+    }, 400)
+
+    // Re-enable viewport filtering and force update after map stabilizes
+    const timer3 = setTimeout(() => {
+      ;(window as any).disableViewportFiltering = false
+      const forceUpdate = (window as any).forceUpdateMarkers
+      if (forceUpdate && typeof forceUpdate === 'function') {
+        forceUpdate()
+      }
+    }, 1000)
+
+    return () => {
+      clearTimeout(timer1)
+      clearTimeout(timer2)
+      clearTimeout(timer3)
+    }
+  }, [isFullscreen, isClient])
+
   // Map initialization useEffect - ONLY runs once or when settings change, NOT when selectedFlight changes
   useEffect(() => {
     if (!isClient) return
@@ -677,6 +730,9 @@ export function AircraftMap({
         if (!window.aircraftMarkersMap) window.aircraftMarkersMap = new Map()
         if (!window.aircraftLabelsMap) window.aircraftLabelsMap = new Map()
 
+        // Initialize viewport filtering flag (false = enabled, true = disabled)
+        ;(window as any).disableViewportFiltering = false
+
         // Icon cache to avoid regenerating identical icons (with size limit to prevent memory bloat)
         if (!window.iconCache) {
           window.iconCache = new Map()
@@ -712,16 +768,28 @@ export function AircraftMap({
         // Track map interaction events
         mapInstance.on('movestart zoomstart', () => {
           isUserInteracting = true
+          // Also disable viewport filtering during zoom/pan to prevent stale bounds issues
+          ;(window as any).disableViewportFiltering = true
           if (interactionTimeout) clearTimeout(interactionTimeout)
         })
 
         mapInstance.on('moveend zoomend', () => {
-          // Resume updates 500ms after interaction ends
+          // Resume updates after map stabilizes
+          // Keep viewport filtering disabled longer to ensure map bounds are fully updated
           if (interactionTimeout) clearTimeout(interactionTimeout)
-          interactionTimeout = setTimeout(() => {
+
+          // Stage 1: Clear interaction flag but keep viewport filtering disabled
+          setTimeout(() => {
             isUserInteracting = false
-            updateMarkers() // Immediate update after interaction
-          }, 500)
+          }, 300)
+
+          // Stage 2: Re-enable viewport filtering and force full update
+          interactionTimeout = setTimeout(() => {
+            // Re-enable viewport filtering after map stabilizes
+            ;(window as any).disableViewportFiltering = false
+            // Force update with fresh bounds
+            updateMarkers()
+          }, 800)
         })
 
         const updateMarkers = () => {
@@ -766,9 +834,21 @@ export function AircraftMap({
           // Instead of clearing ALL trails, we'll selectively update them per aircraft
 
           // Get current map bounds for viewport filtering
-          const mapBounds = mapInstance.getBounds()
-          const bufferFactor = 0.3 // 30% buffer around visible area
+          // Check if viewport filtering is temporarily disabled (e.g., during fullscreen transitions)
+          const viewportFilteringDisabled = (window as any).disableViewportFiltering === true
+          let mapBounds = null
           let boundsWithBuffer = null
+          const bufferFactor = 0.3 // 30% buffer around visible area
+
+          // Safely get map bounds - can fail during transitions or before map is ready
+          try {
+            if (!viewportFilteringDisabled) {
+              mapBounds = mapInstance.getBounds()
+            }
+          } catch (e) {
+            // Map not ready yet, skip viewport filtering this cycle
+            mapBounds = null
+          }
 
           if (mapBounds) {
             const latDiff = mapBounds.getNorth() - mapBounds.getSouth()
@@ -1040,6 +1120,9 @@ export function AircraftMap({
                       this.closePopup()
                     })
                     .on("click", () => {
+                      const registration = flight.r || registration_from_hexid(flight.hex)
+                      const isEmergency = flight.emergency && flight.emergency !== "none"
+                      const squawk = flight.squawk || "N/A"
                       const flightData: SelectedFlight = {
                         id: flight.hex,
                         callsign: flight.flight ? flight.flight.trim() : flight.hex,
@@ -1049,8 +1132,8 @@ export function AircraftMap({
                         heading: Math.round(flight.track || 0),
                         lat: lat,
                         lng: lon,
-                        squawk: flight.squawk || "N/A",
-                        status: flight.emergency && flight.emergency !== "none" ? "Emergency" : "En Route",
+                        squawk: squawk,
+                        status: isEmergency ? "Emergency" : "En Route",
                         registration: registration,
                         hex: flight.hex,
                         type: flight.t || flight.category || "Unknown",
@@ -1157,36 +1240,42 @@ export function AircraftMap({
           })
 
           // Remove markers for aircraft that are no longer present
-          window.aircraftMarkersMap.forEach((markerData: any, hex: string) => {
-            if (!stillPresent.has(hex)) {
-              // Remove from cluster group or map
-              if (window.markerClusterGroup) {
-                window.markerClusterGroup.removeLayer(markerData.marker)
-              } else {
-                mapInstance.removeLayer(markerData.marker)
-              }
-              window.aircraftMarkersMap.delete(hex)
+          // CRITICAL: Skip cleanup when viewport filtering is disabled to prevent removing all markers
+          // during zoom/fullscreen transitions when bounds are stale
+          const skipCleanup = (window as any).disableViewportFiltering === true
 
-              // Also remove labels
-              const labels = window.aircraftLabelsMap.get(hex)
-              if (labels) {
-                labels.forEach((label: any) => mapInstance.removeLayer(label))
-                window.aircraftLabelsMap.delete(hex)
-              }
+          if (!skipCleanup) {
+            window.aircraftMarkersMap.forEach((markerData: any, hex: string) => {
+              if (!stillPresent.has(hex)) {
+                // Remove from cluster group or map
+                if (window.markerClusterGroup) {
+                  window.markerClusterGroup.removeLayer(markerData.marker)
+                } else {
+                  mapInstance.removeLayer(markerData.marker)
+                }
+                window.aircraftMarkersMap.delete(hex)
 
-              // Clean up trail data to prevent memory leaks
-              if (window.aircraftTrails && window.aircraftTrails[hex]) {
-                delete window.aircraftTrails[hex]
-              }
+                // Also remove labels
+                const labels = window.aircraftLabelsMap.get(hex)
+                if (labels) {
+                  labels.forEach((label: any) => mapInstance.removeLayer(label))
+                  window.aircraftLabelsMap.delete(hex)
+                }
 
-              // Clean up trail polyline
-              const trail = window.aircraftTrailsMap.get(hex)
-              if (trail) {
-                mapInstance.removeLayer(trail)
-                window.aircraftTrailsMap.delete(hex)
+                // Clean up trail data to prevent memory leaks
+                if (window.aircraftTrails && window.aircraftTrails[hex]) {
+                  delete window.aircraftTrails[hex]
+                }
+
+                // Clean up trail polyline
+                const trail = window.aircraftTrailsMap.get(hex)
+                if (trail) {
+                  mapInstance.removeLayer(trail)
+                  window.aircraftTrailsMap.delete(hex)
+                }
               }
-            }
-          })
+            })
+          }
 
           // At the end of the updateMarkers function, add:
           console.log(`Updated ${markersArray.length} markers with current settings`)
@@ -1299,8 +1388,15 @@ export function AircraftMap({
 
     if (window.updateMapMarkers && aircraft.length > 0) {
       window.currentFlightData = aircraft
+      // Don't force immediate update - let the normal update cycle handle it
+      // This prevents updates with stale bounds during zoom/pan transitions
+      // The map's zoomend/moveend handlers will trigger updates when ready
       setTimeout(() => {
-        window.updateMapMarkers()
+        // Only update if map is not currently interacting
+        // This prevents race conditions during zoom/fullscreen transitions
+        if (window.updateMapMarkers) {
+          window.updateMapMarkers()
+        }
       }, 100)
     }
   }, [aircraft, isClient])

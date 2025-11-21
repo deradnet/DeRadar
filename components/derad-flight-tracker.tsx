@@ -21,6 +21,7 @@ import { Footer } from "./footer"
 import { DataUploadsSection } from "./data-uploads-section"
 import { ArweaveSnapshotPanel } from "./arweave-snapshot-panel"
 import { arweaveSnapshot } from "@/lib/arweave-snapshot"
+import AircraftCharts from "./aircraft-charts"
 
 export default function DeradFlightTracker() {
   const { aircraft, stats, alerts, isLoading } = useAircraftData()
@@ -605,6 +606,13 @@ export default function DeradFlightTracker() {
               isPlaybackMode={isPlaybackMode}
             />
             <SystemAlerts alerts={alerts} />
+          </div>
+        )}
+
+        {/* Aircraft Analytics Charts */}
+        {!isPlaybackMode && aircraft.length > 0 && (
+          <div className={`${isMobile && isPlaybackMode ? "hidden" : ""}`}>
+            <AircraftCharts aircraft={isPlaybackMode ? playback.getCurrentAircraft() : aircraft} />
           </div>
         )}
 
