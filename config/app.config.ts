@@ -1,18 +1,7 @@
-import { resolveGraphQLUrl, resolveDataUrl, getGatewayInfo } from "@/lib/domain-resolver"
-
 /**
  * Application Configuration
  * Centralized configuration for all URLs, API endpoints, and important parameters
  * Update this file before deployment to customize the application
- *
- * Gateway Resolution with Fallback:
- * - Use "gateway" to auto-detect from current hostname
- * - Automatically falls back to derad.network if endpoints are not available
- * - Use specific domain to override auto-detection
- *
- * Examples:
- * - Running on map.example.com → gateway resolves to example.com
- * - If example.com/graphql returns 404 → falls back to derad.network/graphql
  */
 
 export const APP_CONFIG = {
@@ -420,28 +409,7 @@ export const getThreshold = (category: string, threshold: string) => {
 
 // Environment-specific configuration
 export const getConfig = () => {
-  const config = { ...APP_CONFIG }
-
-  // Override based on deployment environment
-  switch (config.deployment.environment) {
-    case "development":
-      config.deployment.enableDebugMode = true
-      config.deployment.enableConsoleLogging = true
-      config.api.aircraft.updateInterval = 5000 // Slower updates in dev
-      break
-
-    case "staging":
-      config.deployment.enableDebugMode = true
-      config.deployment.enableConsoleLogging = true
-      break
-
-    case "production":
-      config.deployment.enableDebugMode = false
-      config.deployment.enableConsoleLogging = false
-      break
-  }
-
-  return config
+  return APP_CONFIG
 }
 
 // Quick deployment configuration presets
@@ -475,19 +443,5 @@ export const DEPLOYMENT_PRESETS = {
     api: { aircraft: { updateInterval: 10000 } },
   },
 } as const
-
-// Smart gateway resolution helper with fallback
-export const resolveApiUrls = async () => {
-  const config = getConfig()
-  return {
-    graphqlUrl: await resolveGraphQLUrl(config.api.historical.graphqlUrl),
-    dataUrl: await resolveDataUrl(config.api.historical.dataUrl),
-  }
-}
-
-// Get current gateway info for debugging
-export const getGatewayDebugInfo = () => {
-  return getGatewayInfo()
-}
 
 export default APP_CONFIG

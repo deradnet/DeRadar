@@ -9,6 +9,7 @@ const { baseUrl, corsProxy, timeout, retries } = APP_CONFIG.api.aircraft
 
 const EMERGENCY_SQUAWKS = APP_CONFIG.aircraft.emergencySquawks
 const ALERT_THRESHOLDS = APP_CONFIG.alerts.thresholds
+const AIRCRAFT_THRESHOLDS = APP_CONFIG.aircraft.thresholds
 
 /* ------------------------------------------------------------------ */
 /* Data Fetch Helpers                                                 */
@@ -135,7 +136,7 @@ export function generateAlerts(aircraft: Aircraft[]): Alert[] {
 
   /* Emergency squawk codes */
   aircraft
-    .filter((a) => EMERGENCY_SQUAWKS.includes(a.squawk ?? ""))
+    .filter((a) => a.squawk && EMERGENCY_SQUAWKS.includes(a.squawk as any))
     .forEach((a) =>
       alerts.push({
         id: `squawk-${a.hex}`,
@@ -163,7 +164,7 @@ export function generateAlerts(aircraft: Aircraft[]): Alert[] {
       (a) =>
         (a.alt_baro ?? 0) > 0 &&
         (a.alt_baro ?? 0) < ALERT_THRESHOLDS.veryLowAltitude &&
-        (a.gs ?? 0) > ALERT_THRESHOLDS.lowSpeed,
+        (a.gs ?? 0) > AIRCRAFT_THRESHOLDS.lowSpeed,
     )
     .forEach((a) =>
       alerts.push({

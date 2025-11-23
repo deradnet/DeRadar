@@ -6,21 +6,34 @@ const config: CapacitorConfig = {
   webDir: 'out',
   server: {
     androidScheme: 'https',
-    iosScheme: 'https'
+    iosScheme: 'https',
+    // Enable hardware acceleration
+    allowNavigation: ['*'],
+    cleartext: true
+  },
+  android: {
+    // Enable Android-specific optimizations
+    allowMixedContent: true,
+    captureInput: true,
+    webContentsDebuggingEnabled: false
   },
   plugins: {
     SplashScreen: {
       launchShowDuration: 2000,
-      backgroundColor: '#0f172a',
       showSpinner: false,
       androidSpinnerStyle: 'small',
       iosSpinnerStyle: 'small',
       splashFullScreen: true,
-      splashImmersive: true
+      splashImmersive: true,
+      androidScaleType: 'CENTER_CROP'
     },
     StatusBar: {
       style: 'dark',
       backgroundColor: '#0f172a'
+    },
+    App: {
+      // Optimize app lifecycle
+      appRestoredResult: false
     }
   }
 };

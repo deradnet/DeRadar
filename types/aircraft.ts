@@ -57,3 +57,7 @@ export interface SelectedFlight {
   hex: string
   type: string
 }
+
+export interface NearestAircraft extends Aircraft {
+  distance: number
+}

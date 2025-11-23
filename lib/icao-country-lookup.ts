@@ -239,7 +239,9 @@ const ICAO_Ranges: ICAORange[] = [
   { start: 0xf00000, end: 0xffffff, country: "Unassigned (reserved for future use)", country_code: null },
 ]
 
-const unassigned_range = {
+const unassigned_range: ICAORange = {
+  start: 0,
+  end: 0,
   country: "Unassigned",
   country_code: null,
 }

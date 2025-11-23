@@ -1,0 +1,35 @@
+
+> DeRadar@1.1.0 build
+> next build
+
+  ▲ Next.js 14.2.16
+
+   Creating an optimized production build ...
+ ✓ Compiled successfully
+   Linting and checking validity of types ...
+   Collecting page data ...
+   Generating static pages (0/5) ...
+   Generating static pages (1/5) 
+   Generating static pages (2/5) 
+   Generating static pages (3/5) 
+ ✓ Generating static pages (5/5)
+   Finalizing page optimization ...
+   Collecting build traces ...
+
+Route (app)                              Size     First Load JS
+┌ ○ /                                    94.7 kB         194 kB
+├ ○ /_not-found                          873 B          88.3 kB
+└ ○ /test                                138 B          87.6 kB
++ First Load JS shared by all            87.4 kB
+  ├ chunks/117-a405599e29971f5d.js       31.7 kB
+  ├ chunks/fd9d1056-df695ad3360f8076.js  53.6 kB
+  └ other shared chunks (total)          2.11 kB
+
+
+○  (Static)  prerendered as static content
+
+npm notice
+npm notice New patch version of npm available! 11.6.2 -> 11.6.3
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v11.6.3
+npm notice To update run: npm install -g npm@11.6.3
+npm notice

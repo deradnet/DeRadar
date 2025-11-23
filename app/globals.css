@@ -136,9 +136,24 @@
   }
 }
 
-/* Safe area support for devices with notches */
+/* Safe area support for devices with notches and status bars */
 .safe-area-pb {
   padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+.pb-safe {
+  padding-bottom: max(env(safe-area-inset-bottom, 0px), 16px);
+}
+
+.pt-safe {
+  padding-top: max(env(safe-area-inset-top, 0px), 32px);
+}
+
+.safe-area-inset {
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  padding-left: env(safe-area-inset-left, 0px);
+  padding-right: env(safe-area-inset-right, 0px);
 }
 
 /* Animation speed variable */
@@ -377,6 +392,13 @@
   }
 }
 
+.animate-radar-transform-smooth {
+  animation: radar-transform-smooth 0.5s ease-out forwards;
+  will-change: transform, filter;
+  transform: translateZ(0);
+  backface-visibility: hidden;
+  perspective: 1000px;
+}
 
 .animate-spin-fast {
   animation: spin-fast 0.8s linear infinite;
@@ -507,4 +529,87 @@
 .leaflet-overlay-pane {
   will-change: transform;
   transform: translateZ(0);
+}
+
+/* Hardware acceleration optimizations for flight list performance */
+@layer utilities {
+  /* Enable GPU rendering for smooth scrolling */
+  .gpu-accelerated {
+    transform: translateZ(0);
+    will-change: transform;
+    backface-visibility: hidden;
+    perspective: 1000px;
+  }
+
+  /* CSS containment for better rendering performance */
+  .contain-layout {
+    contain: layout;
+  }
+
+  .contain-paint {
+    contain: paint;
+  }
+
+  .contain-strict {
+    contain: strict;
+  }
+
+  .contain-content {
+    contain: content;
+  }
+
+  /* Optimize list items for rendering - CRITICAL for 2000+ flights */
+  .list-item-optimized {
+    contain: layout style paint;
+    will-change: transform;
+    transform: translateZ(0);
+  }
+
+  /* Smooth scrolling with GPU acceleration */
+  .smooth-scroll {
+    -webkit-overflow-scrolling: touch;
+    transform: translateZ(0);
+    will-change: scroll-position;
+  }
+
+  /* Image rendering optimization */
+  .img-optimized {
+    will-change: transform;
+    transform: translateZ(0);
+    image-rendering: -webkit-optimize-contrast;
+    image-rendering: crisp-edges;
+  }
+
+  /* Text rendering optimization */
+  .text-optimized {
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Composite layer for animations */
+  .composite-layer {
+    transform: translateZ(0);
+    will-change: transform, opacity;
+    backface-visibility: hidden;
+  }
+
+  /* Tab content optimization - instant transitions */
+  .tab-content {
+    contain: layout style paint;
+    content-visibility: auto;
+  }
+
+  /* Disable tap highlight on mobile for better UX */
+  * {
+    -webkit-tap-highlight-color: transparent;
+    -webkit-touch-callout: none;
+  }
+
+  /* Optimize transitions for mobile */
+  @media (max-width: 768px) {
+    * {
+      transition-duration: 150ms !important;
+    }
+  }
 }

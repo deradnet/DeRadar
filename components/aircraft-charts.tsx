@@ -6,17 +6,25 @@ import HighchartsReact from "highcharts-react-official"
 import { Aircraft } from "@/types/aircraft"
 import flagColors from "@/public/flags/flag-colors.json"
 import airlineColors from "@/public/airline-colors.json"
+import { BarChart3, Gauge, PieChart, Activity, Globe, Radio, Building2 } from "lucide-react"
+import { Haptics, ImpactStyle } from "@capacitor/haptics"
 
 interface AircraftChartsProps {
   aircraft: Aircraft[]
+  isNativeApp?: boolean
+  isMobile?: boolean
+  isVisible?: boolean
+  onActiveChartChange?: (index: number) => void
 }
 
-export default function AircraftCharts({ aircraft }: AircraftChartsProps) {
+export default function AircraftCharts({ aircraft, isNativeApp = false, isMobile = false, isVisible = true, onActiveChartChange }: AircraftChartsProps) {
   const [chartData, setChartData] = useState<any>(null)
   const updateTimerRef = useRef<NodeJS.Timeout | null>(null)
   const lastUpdateRef = useRef<number>(0)
   const [nextUpdateIn, setNextUpdateIn] = useState<number>(10)
   const [treemapLoaded, setTreemapLoaded] = useState(false)
+  const [activeChartIndex, setActiveChartIndex] = useState(0)
+  const scrollContainerRef = useRef<HTMLDivElement>(null)
 
   // Chart refs for direct updates without re-rendering
   const altitudeChartRef = useRef<any>(null)
@@ -26,6 +34,17 @@ export default function AircraftCharts({ aircraft }: AircraftChartsProps) {
   const countryChartRef = useRef<any>(null)
   const squawkChartRef = useRef<any>(null)
   const airlineChartRef = useRef<any>(null)
+
+  // Chart navigation data
+  const chartNavItems = [
+    { icon: BarChart3, label: "Altitude" },
+    { icon: Gauge, label: "Speed" },
+    { icon: PieChart, label: "Category" },
+    { icon: Activity, label: "Scatter" },
+    { icon: Globe, label: "Country" },
+    { icon: Radio, label: "Squawk" },
+    { icon: Building2, label: "Airline" },
+  ]
 
   // Load treemap module
   useEffect(() => {
@@ -49,6 +68,79 @@ export default function AircraftCharts({ aircraft }: AircraftChartsProps) {
     }
   }, [])
 
+  // Refs for each chart section
+  const chartSectionRefs = useRef<(HTMLDivElement | null)[]>([])
+
+  // Intersection Observer for active chart detection
+  useEffect(() => {
+    if (!isNativeApp || !isMobile) return
+
+    console.log('Setting up Intersection Observer')
+
+    const observer = new IntersectionObserver(
+      (entries: IntersectionObserverEntry[]) => {
+        // Find the most visible entry
+        let maxRatio = 0
+        let targetEntry: IntersectionObserverEntry | undefined
+
+        entries.forEach((entry) => {
+          if (entry.intersectionRatio > maxRatio) {
+            maxRatio = entry.intersectionRatio
+            targetEntry = entry
+          }
+        })
+
+        if (targetEntry && targetEntry.isIntersecting && maxRatio > 0.3) {
+          const index = chartSectionRefs.current.indexOf(targetEntry.target as HTMLDivElement)
+          console.log('Most visible chart:', index, 'ratio:', maxRatio)
+          if (index !== -1) {
+            setActiveChartIndex(index)
+            onActiveChartChange?.(index)
+          }
+        }
+      },
+      {
+        root: scrollContainerRef.current,
+        threshold: [0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0],
+        rootMargin: '0px'
+      }
+    )
+
+    // Wait for next tick to ensure refs are populated
+    setTimeout(() => {
+      console.log('Observing chart sections:', chartSectionRefs.current.length)
+      chartSectionRefs.current.forEach((section, idx) => {
+        if (section) {
+          console.log('Observing chart', idx)
+          observer.observe(section)
+        }
+      })
+    }, 100)
+
+    return () => {
+      console.log('Disconnecting observer')
+      observer.disconnect()
+    }
+  }, [isNativeApp, isMobile, onActiveChartChange])
+
+  // Navigate to specific chart
+  const navigateToChart = async (index: number) => {
+    if (!scrollContainerRef.current) return
+
+    // Haptic feedback
+    try {
+      await Haptics.impact({ style: ImpactStyle.Light })
+    } catch (e) {
+      // Haptics not available
+    }
+
+    const windowHeight = window.innerHeight
+    scrollContainerRef.current.scrollTo({
+      top: index * windowHeight,
+      behavior: 'smooth'
+    })
+  }
+
   // Countdown timer for next update
   useEffect(() => {
     const interval = setInterval(() => {
@@ -67,6 +159,12 @@ export default function AircraftCharts({ aircraft }: AircraftChartsProps) {
 
   useEffect(() => {
     if (!aircraft || aircraft.length === 0) return
+
+    // Only update charts when visible to save CPU
+    if (!isVisible) {
+      console.log('📊 Charts hidden, skipping update')
+      return
+    }
 
     // Filter valid aircraft with data
     const validAircraft = aircraft.filter(
@@ -301,7 +399,7 @@ export default function AircraftCharts({ aircraft }: AircraftChartsProps) {
         totalAircraft: validAircraft.length,
       })
     }
-  }, [aircraft, chartData])
+  }, [aircraft, chartData, isVisible])
 
   // Chart configurations - memoized to prevent unnecessary re-renders
   // These must be defined before any conditional returns to follow Rules of Hooks
@@ -509,7 +607,7 @@ export default function AircraftCharts({ aircraft }: AircraftChartsProps) {
           align: "left",
           inside: true,
           x: -3,
-          formatter: function () {
+          formatter: function (this: any) {
             const point = this.point as any
             const flagCode = point.code || "XX"
             return `<div style="display: flex; align-items: center; gap: 8px; margin: 0; padding: 0;">
@@ -532,7 +630,7 @@ export default function AircraftCharts({ aircraft }: AircraftChartsProps) {
       backgroundColor: "#1e293b",
       style: { color: "#e2e8f0" },
       useHTML: true,
-      formatter: function () {
+      formatter: function (this: any) {
         const point = this.point as any
         const flagCode = point.code || "XX"
         return `<div style="display: flex; align-items: center; gap: 8px;">
@@ -661,66 +759,58 @@ export default function AircraftCharts({ aircraft }: AircraftChartsProps) {
   }
 
   return (
-    <div className="space-y-6 p-6 bg-slate-900/50 rounded-lg">
-      <div className="flex items-center justify-between flex-wrap gap-4">
-        <h2 className="text-2xl font-bold text-slate-100">Aircraft Analytics</h2>
-        <div className="flex items-center gap-4">
-          <div className="text-sm text-slate-400">
-            Analyzing <span className="text-blue-400 font-semibold">{chartData.totalAircraft}</span>{" "}
-            aircraft
-          </div>
-          <div className="flex items-center gap-2">
+    <>
+      <div ref={scrollContainerRef} className={isNativeApp && isMobile ? "fixed inset-0 h-screen overflow-y-scroll snap-y snap-mandatory bg-slate-950" : "space-y-6 p-6 bg-slate-900/50 rounded-lg"}>
+        {!isNativeApp && (
+        <div className="flex items-center justify-between flex-wrap gap-4">
+          <h2 className="text-2xl font-bold text-slate-100">Aircraft Analytics</h2>
+          <div className="flex items-center gap-4">
+            <div className="text-sm text-slate-400">
+              Analyzing <span className="text-blue-400 font-semibold">{chartData.totalAircraft}</span>{" "}
+              aircraft
+            </div>
             {nextUpdateIn > 0 && (
               <div className="text-xs text-slate-500">
                 Next update: {nextUpdateIn}s
               </div>
             )}
-            <button
-              onClick={forceUpdate}
-              className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded-lg transition-colors flex items-center gap-2"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-              </svg>
-              Refresh
-            </button>
           </div>
         </div>
-      </div>
+        )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className={isNativeApp && isMobile ? "space-y-0" : "grid grid-cols-1 lg:grid-cols-2 gap-6"}>
         {/* Altitude Distribution */}
-        <div className="bg-slate-800/50 rounded-lg p-4 border border-slate-700">
+        <div ref={(el) => { chartSectionRefs.current[0] = el }} className={isNativeApp && isMobile ? "h-screen snap-start snap-always flex items-center justify-center p-6 bg-slate-950" : "bg-slate-800/50 rounded-lg p-4 border border-slate-700"}>
           <HighchartsReact ref={altitudeChartRef} highcharts={Highcharts} options={altitudeChartOptions} />
         </div>
 
         {/* Speed Distribution */}
-        <div className="bg-slate-800/50 rounded-lg p-4 border border-slate-700">
+        <div ref={(el) => { chartSectionRefs.current[1] = el }} className={isNativeApp && isMobile ? "h-screen snap-start snap-always flex items-center justify-center p-6 bg-slate-950" : "bg-slate-800/50 rounded-lg p-4 border border-slate-700"}>
           <HighchartsReact ref={speedChartRef} highcharts={Highcharts} options={speedChartOptions} />
         </div>
 
         {/* Category Pie Chart */}
-        <div className="bg-slate-800/50 rounded-lg p-4 border border-slate-700">
+        <div ref={(el) => { chartSectionRefs.current[2] = el }} className={isNativeApp && isMobile ? "h-screen snap-start snap-always flex items-center justify-center p-6 bg-slate-950" : "bg-slate-800/50 rounded-lg p-4 border border-slate-700"}>
           <HighchartsReact ref={categoryChartRef} highcharts={Highcharts} options={categoryChartOptions} />
         </div>
 
         {/* Altitude vs Speed Scatter */}
-        <div className="bg-slate-800/50 rounded-lg p-4 border border-slate-700">
+        <div ref={(el) => { chartSectionRefs.current[3] = el }} className={isNativeApp && isMobile ? "h-screen snap-start snap-always flex items-center justify-center p-6 bg-slate-950" : "bg-slate-800/50 rounded-lg p-4 border border-slate-700"}>
           <HighchartsReact ref={scatterChartRef} highcharts={Highcharts} options={scatterChartOptions} />
         </div>
 
         {/* Registration Country */}
-        <div className="bg-slate-800/50 rounded-lg p-4 border border-slate-700">
+        <div ref={(el) => { chartSectionRefs.current[4] = el }} className={isNativeApp && isMobile ? "h-screen snap-start snap-always flex items-center justify-center p-6 bg-slate-950" : "bg-slate-800/50 rounded-lg p-4 border border-slate-700"}>
           <HighchartsReact ref={countryChartRef} highcharts={Highcharts} options={countryChartOptions} />
         </div>
 
         {/* Squawk Code Distribution */}
-        <div className="bg-slate-800/50 rounded-lg p-4 border border-slate-700">
+        <div ref={(el) => { chartSectionRefs.current[5] = el }} className={isNativeApp && isMobile ? "h-screen snap-start snap-always flex items-center justify-center p-6 bg-slate-950" : "bg-slate-800/50 rounded-lg p-4 border border-slate-700"}>
           <HighchartsReact ref={squawkChartRef} highcharts={Highcharts} options={squawkChartOptions} />
         </div>
 
         {/* Airline Treemap */}
-        <div className="bg-slate-800/50 rounded-lg p-4 border border-slate-700 lg:col-span-2">
+        <div ref={(el) => { chartSectionRefs.current[6] = el }} className={isNativeApp && isMobile ? "h-screen snap-start snap-always flex items-center justify-center p-6 bg-slate-950" : "bg-slate-800/50 rounded-lg p-4 border border-slate-700 lg:col-span-2"}>
           {treemapLoaded ? (
             <HighchartsReact ref={airlineChartRef} highcharts={Highcharts} options={airlineChartOptions} />
           ) : (
@@ -730,6 +820,44 @@ export default function AircraftCharts({ aircraft }: AircraftChartsProps) {
           )}
         </div>
       </div>
-    </div>
+      </div>
+
+      {/* Chart Navigation Mini Icons - Only show in native app mobile */}
+      {isNativeApp && isMobile && (
+        <div className="fixed bottom-20 left-0 right-0 z-40 pointer-events-none">
+          <div className="flex justify-center items-center gap-1.5 px-4 pb-3">
+            <div className="bg-gradient-to-r from-slate-900/80 via-slate-800/70 to-slate-900/80 backdrop-blur-[40px] border border-white/10 rounded-full px-3 py-2 shadow-2xl pointer-events-auto">
+              <div className="flex gap-2">
+                {chartNavItems.map((item, index) => {
+                  const Icon = item.icon
+                  const isActive = activeChartIndex === index
+                  return (
+                    <button
+                      key={index}
+                      onClick={() => navigateToChart(index)}
+                      className={`relative transition-all duration-300 touch-manipulation ${
+                        isActive ? "scale-110" : "scale-100 opacity-60"
+                      }`}
+                      aria-label={item.label}
+                    >
+                      <div className={`p-1.5 rounded-lg transition-all duration-300 ${
+                        isActive
+                          ? "bg-blue-500/20 text-blue-400"
+                          : "bg-slate-700/30 text-slate-400 active:bg-slate-600/40"
+                      }`}>
+                        <Icon className="w-3.5 h-3.5" />
+                      </div>
+                      {isActive && (
+                        <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 bg-blue-400 rounded-full shadow-lg shadow-blue-400/50"></div>
+                      )}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   )
 }

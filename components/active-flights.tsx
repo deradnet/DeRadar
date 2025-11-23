@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo, memo } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -19,6 +19,8 @@ import { CountryFlag } from "@/components/country-flag"
 import { getAirlineFromCallsign } from "@/lib/airline-lookup"
 import { AircraftInfoPanel } from "./aircraft-info-panel"
 import type { SelectedFlight } from "@/types/aircraft"
+import { useAdaptivePerformance } from "@/hooks/use-adaptive-performance"
+import { useBatterySaver, applyPowerSaveOptimizations, removePowerSaveOptimizations } from "@/hooks/use-battery-saver"
 
 interface ActiveFlightsProps {
   aircraft: Aircraft[]
@@ -26,6 +28,10 @@ interface ActiveFlightsProps {
   onSearchChange: (term: string) => void
   onFlightSelect: (flight: Aircraft) => void
   isPlaybackMode?: boolean
+  isNativeApp?: boolean
+  showFilters?: boolean
+  onToggleFilters?: () => void
+  onFilterStateChange?: (hasFilters: boolean) => void
 }
 
 export function ActiveFlights({
@@ -34,8 +40,14 @@ export function ActiveFlights({
   onSearchChange,
   onFlightSelect,
   isPlaybackMode = false,
+  isNativeApp = false,
+  showFilters: externalShowFilters,
+  onToggleFilters,
+  onFilterStateChange,
 }: ActiveFlightsProps) {
-  const [showFilters, setShowFilters] = useState(false)
+  const [internalShowFilters, setInternalShowFilters] = useState(false)
+  const showFilters = externalShowFilters !== undefined ? externalShowFilters : internalShowFilters
+  const setShowFilters = onToggleFilters || setInternalShowFilters
   const [showDebug, setShowDebug] = useState(false)
   const [selectedFlight, setSelectedFlight] = useState<SelectedFlight | null>(null)
   const [showAircraftPanel, setShowAircraftPanel] = useState(false)
@@ -47,10 +59,30 @@ export function ActiveFlights({
     maxSpeed: 1000,
     aircraftType: "all",
   })
-  const [visibleFlights, setVisibleFlights] = useState(6)
+  const { settings: perfSettings, isLowEnd } = useAdaptivePerformance()
+  const { powerSaveMode } = useBatterySaver()
+
+  const [visibleFlights, setVisibleFlights] = useState(isNativeApp ? 50 : 15)
   const [airlineInfo, setAirlineInfo] = useState<Record<string, any>>({})
 
-  const filteredFlights = aircraft.filter((flight) => {
+  // Apply power save mode
+  useEffect(() => {
+    if (powerSaveMode) {
+      applyPowerSaveOptimizations()
+    } else {
+      removePowerSaveOptimizations()
+    }
+  }, [powerSaveMode])
+
+  // Adjust visible flights based on device performance
+  useEffect(() => {
+    if (perfSettings && visibleFlights !== perfSettings.maxVisibleFlights) {
+      setVisibleFlights(perfSettings.maxVisibleFlights)
+      console.log(`📱 Adjusted visible flights to ${perfSettings.maxVisibleFlights} for ${perfSettings.tier}-end device`)
+    }
+  }, [perfSettings])
+
+  const filteredFlights = useMemo(() => aircraft.filter((flight) => {
     // Search filter
     const searchLower = searchTerm.toLowerCase()
     const flightMatch = flight.flight && flight.flight.trim().toLowerCase().includes(searchLower)
@@ -97,17 +129,19 @@ export function ActiveFlights({
     }
 
     return matchesSearch && matchesEmergency && matchesAltitude && matchesSpeed && matchesType
-  })
+  }), [aircraft, searchTerm, filterCriteria])
 
-  const displayedFlights = filteredFlights.slice(0, visibleFlights)
+  const displayedFlights = useMemo(() => filteredFlights.slice(0, visibleFlights), [filteredFlights, visibleFlights])
 
   const handleScroll = (event: React.UIEvent<HTMLDivElement>) => {
     const { scrollTop, scrollHeight, clientHeight } = event.currentTarget
 
-    // Load more when scrolled to within 100px of bottom
-    if (scrollHeight - scrollTop <= clientHeight + 100) {
+    // Load more when scrolled to within 200px of bottom
+    if (scrollHeight - scrollTop <= clientHeight + 200) {
       if (visibleFlights < filteredFlights.length) {
-        setVisibleFlights((prev) => Math.min(prev + 6, filteredFlights.length))
+        // Load more based on device performance
+        const loadAmount = perfSettings?.tier === "low" ? 10 : 15
+        setVisibleFlights((prev) => Math.min(prev + loadAmount, filteredFlights.length))
       }
     }
   }
@@ -139,26 +173,36 @@ export function ActiveFlights({
   }
 
   useEffect(() => {
-    setVisibleFlights(6)
-  }, [searchTerm, filterCriteria])
+    setVisibleFlights(isNativeApp ? 50 : 15)
+  }, [searchTerm, filterCriteria, isNativeApp])
 
+  // Lazy load airline info as user scrolls - batch fetch visible flights
   useEffect(() => {
     const fetchAirlineInfo = async () => {
       const newAirlineInfo: Record<string, any> = {}
+      const toFetch: string[] = []
 
-      for (const flight of aircraft) {
+      // Collect callsigns that need fetching (only visible flights)
+      for (const flight of displayedFlights) {
         if (flight.flight && flight.flight.trim()) {
           const callsign = flight.flight.trim()
-          if (!airlineInfo[callsign]) {
-            try {
-              const airline = await getAirlineFromCallsign(callsign)
-              if (airline) {
-                newAirlineInfo[callsign] = airline
-              }
-            } catch (error) {
-              // Silently handle errors
-            }
+          if (!airlineInfo[callsign] && !toFetch.includes(callsign)) {
+            toFetch.push(callsign)
           }
+        }
+      }
+
+      // Batch fetch in chunks of 10 to avoid overwhelming the API
+      const chunkSize = 10
+      for (let i = 0; i < Math.min(toFetch.length, chunkSize); i++) {
+        const callsign = toFetch[i]
+        try {
+          const airline = await getAirlineFromCallsign(callsign)
+          if (airline) {
+            newAirlineInfo[callsign] = airline
+          }
+        } catch (error) {
+          // Silently handle errors
         }
       }
 
@@ -167,8 +211,10 @@ export function ActiveFlights({
       }
     }
 
-    fetchAirlineInfo()
-  }, [aircraft])
+    // Debounce to avoid excessive fetching during rapid scrolling
+    const timer = setTimeout(fetchAirlineInfo, 300)
+    return () => clearTimeout(timer)
+  }, [displayedFlights.length, visibleFlights])
 
   const hasActiveFilters =
     filterCriteria.showEmergencyOnly ||
@@ -178,14 +224,22 @@ export function ActiveFlights({
     filterCriteria.maxSpeed < 1000 ||
     filterCriteria.aircraftType !== "all"
 
+  // Notify parent about filter state changes
+  useEffect(() => {
+    if (onFilterStateChange) {
+      onFilterStateChange(hasActiveFilters)
+    }
+  }, [hasActiveFilters, onFilterStateChange])
+
   const cardClass = `lg:col-span-2 bg-slate-900/30 border-slate-800/50 backdrop-blur-xl ${isPlaybackMode ? "border-purple-500/30" : ""}`
   const titleClass = isPlaybackMode ? "text-purple-300" : "text-blue-400"
 
   return (
     <>
       <Card className={cardClass}>
-        <CardHeader>
+        <CardHeader className={isNativeApp ? "pb-3" : ""}>
           <CardTitle className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+            {!isNativeApp && (
             <div className="flex items-center gap-2">
               <Plane className={`w-5 h-5 ${titleClass}`} />
               <span className="text-white">{isPlaybackMode ? "Historical Flights" : "Active Flights"}</span>
@@ -204,7 +258,10 @@ export function ActiveFlights({
                 </Badge>
               )}
             </div>
-            <div className="flex gap-2 w-full sm:w-auto relative">
+            )}
+            <div className={`flex gap-2 ${isNativeApp ? "w-full justify-end" : "w-full sm:w-auto"} relative`}>
+              {/* Search bar - Hidden in native app (shown in bottom nav instead) */}
+              {!isNativeApp && (
               <div className="relative flex-1 sm:max-w-xs">
                 <Input
                   placeholder="Search flights, hex, reg, type..."
@@ -223,6 +280,9 @@ export function ActiveFlights({
                   </Button>
                 )}
               </div>
+              )}
+              {/* Filter button - Hidden in native app (shown in bottom nav instead) */}
+              {!isNativeApp && (
               <Button
                 size="sm"
                 variant="outline"
@@ -232,6 +292,7 @@ export function ActiveFlights({
                 <Filter className="w-4 h-4" />
                 {hasActiveFilters && <div className="absolute -top-1 -right-1 w-2 h-2 bg-blue-500 rounded-full"></div>}
               </Button>
+              )}
             </div>
           </CardTitle>
 
@@ -357,7 +418,7 @@ export function ActiveFlights({
           )}
         </CardHeader>
         <CardContent>
-          <ScrollArea className="h-[400px]" onScrollCapture={handleScroll}>
+          <ScrollArea className={isNativeApp ? "h-[calc(100vh-200px)]" : "h-[400px]"} onScrollCapture={handleScroll}>
             <div className="space-y-2">
               {displayedFlights.map((flight) => {
                 const registration = flight.r || registration_from_hexid(flight.hex)
@@ -373,6 +434,11 @@ export function ActiveFlights({
                         : "bg-slate-800/30 border-slate-700/50 hover:bg-slate-700/50"
                     } backdrop-blur-sm`}
                     onClick={() => handleFlightClick(flight)}
+                    style={{
+                      contain: "layout style paint",
+                      willChange: "transform",
+                      transform: "translateZ(0)",
+                    }}
                   >
                     <div className="flex items-center justify-between">
                       <div className="flex-1">
@@ -389,6 +455,8 @@ export function ActiveFlights({
                                     src={`https://airline-logo-api.derad.org/${airline.IATA}.png`}
                                     alt={airline.Name}
                                     className="w-8 h-6 object-contain"
+                                    loading="lazy"
+                                    decoding="async"
                                     onError={(e) => {
                                       e.currentTarget.style.display = "none"
                                     }}
@@ -497,7 +565,6 @@ export function ActiveFlights({
         <AircraftInfoPanel
           selectedFlight={selectedFlight}
           onClose={() => setShowAircraftPanel(false)}
-          openedFrom="list"
         />
       )}
     </>

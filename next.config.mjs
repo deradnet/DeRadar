@@ -1,51 +1,47 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  output: 'export',
+  output: "export",
+  distDir: "out",
   trailingSlash: true,
-  skipTrailingSlashRedirect: true,
-  distDir: 'out',
   images: {
     unoptimized: true,
-    loader: 'custom',
-    loaderFile: './image-loader.js'
   },
-  assetPrefix: process.env.NODE_ENV === 'production' ? '' : '',
-  basePath: '',
+
+  // Enable SWC minification for faster builds
+  swcMinify: true,
+
+  // Optimize bundle
   experimental: {
-    esmExternals: 'loose'
+    esmExternals: true,
   },
-  eslint: {
-    ignoreDuringBuilds: true,
+
+  // Compiler optimizations
+  compiler: {
+    removeConsole: {
+      exclude: ["error", "warn"],
+    },
   },
-  typescript: {
-    ignoreBuildErrors: true,
-  },
+
+  // Webpack optimizations
   webpack: (config, { isServer }) => {
-    // Handle leaflet for SSR
+    // Handle node modules for client-side
     if (!isServer) {
       config.resolve.fallback = {
         ...config.resolve.fallback,
         fs: false,
         net: false,
         tls: false,
-      };
+        crypto: false,
+        stream: false,
+        http: false,
+        https: false,
+        zlib: false,
+        path: false,
+        os: false,
+      }
     }
-    
-    // Handle dynamic imports
-    config.resolve.alias = {
-      ...config.resolve.alias,
-    };
-
-    return config;
+    return config
   },
-  // Ensure public assets are copied
-  generateBuildId: async () => {
-    return 'build-' + Date.now()
-  },
-  // Disable server-side features for static export
-  poweredByHeader: false,
-  reactStrictMode: true,
-  swcMinify: true,
 }
 
 export default nextConfig
