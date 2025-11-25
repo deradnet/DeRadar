@@ -74,51 +74,50 @@ export default function AircraftCharts({ aircraft, isNativeApp = false, isMobile
   // Intersection Observer for active chart detection
   useEffect(() => {
     if (!isNativeApp || !isMobile) return
+    if (!scrollContainerRef.current) return
 
-    console.log('Setting up Intersection Observer')
+    const scrollContainer = scrollContainerRef.current
 
     const observer = new IntersectionObserver(
       (entries: IntersectionObserverEntry[]) => {
         // Find the most visible entry
         let maxRatio = 0
-        let targetEntry: IntersectionObserverEntry | undefined
+        let targetIndex = -1
 
         entries.forEach((entry) => {
-          if (entry.intersectionRatio > maxRatio) {
+          if (entry.isIntersecting && entry.intersectionRatio > maxRatio) {
             maxRatio = entry.intersectionRatio
-            targetEntry = entry
+            const index = chartSectionRefs.current.indexOf(entry.target as HTMLDivElement)
+            if (index !== -1) {
+              targetIndex = index
+            }
           }
         })
 
-        if (targetEntry && targetEntry.isIntersecting && maxRatio > 0.3) {
-          const index = chartSectionRefs.current.indexOf(targetEntry.target as HTMLDivElement)
-          console.log('Most visible chart:', index, 'ratio:', maxRatio)
-          if (index !== -1) {
-            setActiveChartIndex(index)
-            onActiveChartChange?.(index)
-          }
+        // Update active chart if we found a visible one with at least 50% visibility
+        if (targetIndex !== -1 && maxRatio > 0.5) {
+          setActiveChartIndex(targetIndex)
+          onActiveChartChange?.(targetIndex)
         }
       },
       {
-        root: scrollContainerRef.current,
+        root: scrollContainer,
         threshold: [0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0],
         rootMargin: '0px'
       }
     )
 
     // Wait for next tick to ensure refs are populated
-    setTimeout(() => {
-      console.log('Observing chart sections:', chartSectionRefs.current.length)
-      chartSectionRefs.current.forEach((section, idx) => {
+    const timeoutId = setTimeout(() => {
+      chartSectionRefs.current.forEach((section) => {
         if (section) {
-          console.log('Observing chart', idx)
           observer.observe(section)
         }
       })
     }, 100)
 
     return () => {
-      console.log('Disconnecting observer')
+      clearTimeout(timeoutId)
       observer.disconnect()
     }
   }, [isNativeApp, isMobile, onActiveChartChange])
@@ -134,12 +133,48 @@ export default function AircraftCharts({ aircraft, isNativeApp = false, isMobile
       // Haptics not available
     }
 
+    // Update active index immediately for instant UI feedback
+    setActiveChartIndex(index)
+    onActiveChartChange?.(index)
+
     const windowHeight = window.innerHeight
     scrollContainerRef.current.scrollTo({
       top: index * windowHeight,
       behavior: 'smooth'
     })
   }
+
+  // Backup scroll listener to detect active chart manually
+  useEffect(() => {
+    if (!isNativeApp || !isMobile) return
+    if (!scrollContainerRef.current) return
+
+    const scrollContainer = scrollContainerRef.current
+    let scrollTimeout: NodeJS.Timeout
+
+    const handleScroll = () => {
+      clearTimeout(scrollTimeout)
+      scrollTimeout = setTimeout(() => {
+        if (!scrollContainer) return
+
+        const scrollTop = scrollContainer.scrollTop
+        const windowHeight = window.innerHeight
+        const currentIndex = Math.round(scrollTop / windowHeight)
+
+        if (currentIndex !== activeChartIndex && currentIndex >= 0 && currentIndex < chartNavItems.length) {
+          setActiveChartIndex(currentIndex)
+          onActiveChartChange?.(currentIndex)
+        }
+      }, 150)
+    }
+
+    scrollContainer.addEventListener('scroll', handleScroll, { passive: true })
+
+    return () => {
+      clearTimeout(scrollTimeout)
+      scrollContainer.removeEventListener('scroll', handleScroll)
+    }
+  }, [isNativeApp, isMobile, activeChartIndex, chartNavItems.length, onActiveChartChange])
 
   // Countdown timer for next update
   useEffect(() => {
@@ -780,44 +815,58 @@ export default function AircraftCharts({ aircraft, isNativeApp = false, isMobile
 
       <div className={isNativeApp && isMobile ? "space-y-0" : "grid grid-cols-1 lg:grid-cols-2 gap-6"}>
         {/* Altitude Distribution */}
-        <div ref={(el) => { chartSectionRefs.current[0] = el }} className={isNativeApp && isMobile ? "h-screen snap-start snap-always flex items-center justify-center p-6 bg-slate-950" : "bg-slate-800/50 rounded-lg p-4 border border-slate-700"}>
-          <HighchartsReact ref={altitudeChartRef} highcharts={Highcharts} options={altitudeChartOptions} />
+        <div ref={(el) => { chartSectionRefs.current[0] = el }} className={isNativeApp && isMobile ? "h-screen snap-start snap-always flex items-center justify-center px-4 bg-slate-950" : "bg-slate-800/50 rounded-lg p-4 border border-slate-700"}>
+          <div className="w-full max-w-2xl">
+            <HighchartsReact ref={altitudeChartRef} highcharts={Highcharts} options={altitudeChartOptions} />
+          </div>
         </div>
 
         {/* Speed Distribution */}
-        <div ref={(el) => { chartSectionRefs.current[1] = el }} className={isNativeApp && isMobile ? "h-screen snap-start snap-always flex items-center justify-center p-6 bg-slate-950" : "bg-slate-800/50 rounded-lg p-4 border border-slate-700"}>
-          <HighchartsReact ref={speedChartRef} highcharts={Highcharts} options={speedChartOptions} />
+        <div ref={(el) => { chartSectionRefs.current[1] = el }} className={isNativeApp && isMobile ? "h-screen snap-start snap-always flex items-center justify-center px-4 bg-slate-950" : "bg-slate-800/50 rounded-lg p-4 border border-slate-700"}>
+          <div className="w-full max-w-2xl">
+            <HighchartsReact ref={speedChartRef} highcharts={Highcharts} options={speedChartOptions} />
+          </div>
         </div>
 
         {/* Category Pie Chart */}
-        <div ref={(el) => { chartSectionRefs.current[2] = el }} className={isNativeApp && isMobile ? "h-screen snap-start snap-always flex items-center justify-center p-6 bg-slate-950" : "bg-slate-800/50 rounded-lg p-4 border border-slate-700"}>
-          <HighchartsReact ref={categoryChartRef} highcharts={Highcharts} options={categoryChartOptions} />
+        <div ref={(el) => { chartSectionRefs.current[2] = el }} className={isNativeApp && isMobile ? "h-screen snap-start snap-always flex items-center justify-center px-4 bg-slate-950" : "bg-slate-800/50 rounded-lg p-4 border border-slate-700"}>
+          <div className="w-full max-w-2xl">
+            <HighchartsReact ref={categoryChartRef} highcharts={Highcharts} options={categoryChartOptions} />
+          </div>
         </div>
 
         {/* Altitude vs Speed Scatter */}
-        <div ref={(el) => { chartSectionRefs.current[3] = el }} className={isNativeApp && isMobile ? "h-screen snap-start snap-always flex items-center justify-center p-6 bg-slate-950" : "bg-slate-800/50 rounded-lg p-4 border border-slate-700"}>
-          <HighchartsReact ref={scatterChartRef} highcharts={Highcharts} options={scatterChartOptions} />
+        <div ref={(el) => { chartSectionRefs.current[3] = el }} className={isNativeApp && isMobile ? "h-screen snap-start snap-always flex items-center justify-center px-4 bg-slate-950" : "bg-slate-800/50 rounded-lg p-4 border border-slate-700"}>
+          <div className="w-full max-w-2xl">
+            <HighchartsReact ref={scatterChartRef} highcharts={Highcharts} options={scatterChartOptions} />
+          </div>
         </div>
 
         {/* Registration Country */}
-        <div ref={(el) => { chartSectionRefs.current[4] = el }} className={isNativeApp && isMobile ? "h-screen snap-start snap-always flex items-center justify-center p-6 bg-slate-950" : "bg-slate-800/50 rounded-lg p-4 border border-slate-700"}>
-          <HighchartsReact ref={countryChartRef} highcharts={Highcharts} options={countryChartOptions} />
+        <div ref={(el) => { chartSectionRefs.current[4] = el }} className={isNativeApp && isMobile ? "h-screen snap-start snap-always flex items-center justify-center px-4 bg-slate-950" : "bg-slate-800/50 rounded-lg p-4 border border-slate-700"}>
+          <div className="w-full max-w-2xl">
+            <HighchartsReact ref={countryChartRef} highcharts={Highcharts} options={countryChartOptions} />
+          </div>
         </div>
 
         {/* Squawk Code Distribution */}
-        <div ref={(el) => { chartSectionRefs.current[5] = el }} className={isNativeApp && isMobile ? "h-screen snap-start snap-always flex items-center justify-center p-6 bg-slate-950" : "bg-slate-800/50 rounded-lg p-4 border border-slate-700"}>
-          <HighchartsReact ref={squawkChartRef} highcharts={Highcharts} options={squawkChartOptions} />
+        <div ref={(el) => { chartSectionRefs.current[5] = el }} className={isNativeApp && isMobile ? "h-screen snap-start snap-always flex items-center justify-center px-4 bg-slate-950" : "bg-slate-800/50 rounded-lg p-4 border border-slate-700"}>
+          <div className="w-full max-w-2xl">
+            <HighchartsReact ref={squawkChartRef} highcharts={Highcharts} options={squawkChartOptions} />
+          </div>
         </div>
 
         {/* Airline Treemap */}
-        <div ref={(el) => { chartSectionRefs.current[6] = el }} className={isNativeApp && isMobile ? "h-screen snap-start snap-always flex items-center justify-center p-6 bg-slate-950" : "bg-slate-800/50 rounded-lg p-4 border border-slate-700 lg:col-span-2"}>
-          {treemapLoaded ? (
-            <HighchartsReact ref={airlineChartRef} highcharts={Highcharts} options={airlineChartOptions} />
-          ) : (
-            <div className="flex items-center justify-center h-96 text-slate-400">
-              Loading airline treemap...
-            </div>
-          )}
+        <div ref={(el) => { chartSectionRefs.current[6] = el }} className={isNativeApp && isMobile ? "h-screen snap-start snap-always flex items-center justify-center px-4 bg-slate-950" : "bg-slate-800/50 rounded-lg p-4 border border-slate-700 lg:col-span-2"}>
+          <div className="w-full max-w-2xl">
+            {treemapLoaded ? (
+              <HighchartsReact ref={airlineChartRef} highcharts={Highcharts} options={airlineChartOptions} />
+            ) : (
+              <div className="flex items-center justify-center h-96 text-slate-400">
+                Loading airline treemap...
+              </div>
+            )}
+          </div>
         </div>
       </div>
       </div>

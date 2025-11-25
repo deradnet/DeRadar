@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { X, Plane, MapPin, Gauge, ArrowUp } from "lucide-react"
+import { X, Plane, MapPin, Gauge, ArrowUp, Locate } from "lucide-react"
 import type { SelectedFlight } from "@/types/aircraft"
 import { CountryFlag } from "@/components/country-flag"
 import { motion, AnimatePresence } from "framer-motion"
@@ -9,27 +9,49 @@ import { motion, AnimatePresence } from "framer-motion"
 interface AircraftInfoPanelProps {
   selectedFlight: SelectedFlight
   onClose: () => void
+  onShowOnMap?: (hex: string) => void
 }
 
-export function AircraftInfoPanel({ selectedFlight, onClose }: AircraftInfoPanelProps) {
+export function AircraftInfoPanel({ selectedFlight, onClose, onShowOnMap }: AircraftInfoPanelProps) {
   const [aircraftImage, setAircraftImage] = useState<string | null>(null)
 
   useEffect(() => {
+    setAircraftImage(null) // Reset image when aircraft changes
+
     const loadImage = async () => {
+      if (!selectedFlight.registration && !selectedFlight.hex) return
+
       try {
-        const response = await fetch(`https://api.planespotters.net/pub/photos/hex/${selectedFlight.hex}`)
+        // Try using registration first if available
+        const query = selectedFlight.registration || selectedFlight.hex
+        const response = await fetch(
+          `https://api.planespotters.net/pub/photos/reg/${query}`,
+          {
+            headers: {
+              'Accept': 'application/json',
+            },
+          }
+        )
+
         if (response.ok) {
           const data = await response.json()
           if (data.photos && data.photos.length > 0) {
-            setAircraftImage(data.photos[0].thumbnail_large.src)
+            const photo = data.photos[0]
+            // Use thumbnail_large if available, otherwise use thumbnail
+            const imageUrl = photo.thumbnail_large?.src || photo.thumbnail?.src
+            if (imageUrl) {
+              setAircraftImage(imageUrl)
+            }
           }
         }
       } catch (error) {
-        console.error("Error loading aircraft image:", error)
+        // Silently fail - image is optional
+        console.log("Aircraft image not available")
       }
     }
+
     loadImage()
-  }, [selectedFlight.hex])
+  }, [selectedFlight.hex, selectedFlight.registration])
 
   return (
     <AnimatePresence>
@@ -55,13 +77,29 @@ export function AircraftInfoPanel({ selectedFlight, onClose }: AircraftInfoPanel
           <div className="w-12 h-1.5 bg-slate-600 rounded-full" />
         </div>
 
-        {/* Close Button */}
-        <button
-          onClick={onClose}
-          className="absolute top-5 right-4 p-2 bg-slate-800/80 hover:bg-slate-700 rounded-full transition-colors z-10"
-        >
-          <X className="w-5 h-5 text-white" />
-        </button>
+        {/* Close and Locate Buttons */}
+        <div className="absolute top-5 right-4 flex items-center gap-2 z-10">
+          {onShowOnMap && selectedFlight.lat && selectedFlight.lng && (
+            <button
+              onClick={() => {
+                onShowOnMap(selectedFlight.hex)
+                if ((window as any).Capacitor?.Plugins?.Haptics) {
+                  (window as any).Capacitor.Plugins.Haptics.impact({ style: 'light' })
+                }
+              }}
+              className="p-2.5 bg-blue-500/20 hover:bg-blue-500/30 active:bg-blue-500/40 border border-blue-500/40 rounded-full transition-all active:scale-95 shadow-lg"
+              title="Locate on map"
+            >
+              <Locate className="w-5 h-5 text-blue-400" />
+            </button>
+          )}
+          <button
+            onClick={onClose}
+            className="p-2.5 bg-slate-800/80 hover:bg-slate-700 active:bg-slate-600 rounded-full transition-all active:scale-95 shadow-lg"
+          >
+            <X className="w-5 h-5 text-white" />
+          </button>
+        </div>
 
         {/* Content */}
         <div className="overflow-y-auto max-h-[calc(85vh-3rem)] pb-6">

@@ -1,7 +1,8 @@
 import { memo } from "react"
-import { Zap, ArrowUp, Radio, Plane } from "lucide-react"
+import { Zap, ArrowUp, Radio, Plane, Locate } from "lucide-react"
 import { registration_from_hexid } from "@/lib/registration-lookup"
 import type { AircraftStats } from "@/types/aircraft"
+import { haptic } from "@/lib/haptics"
 
 interface LiveRecordsProps {
   stats: AircraftStats
@@ -13,6 +14,8 @@ interface LiveRecordsProps {
   signalHistory: { time: number; value: number; aircraft: string }[]
   activeSignals: number
   messageRate: string
+  onShowOnMap?: (hex: string) => void
+  isNativeApp?: boolean
 }
 
 export const LiveRecords = memo(function LiveRecords({
@@ -25,6 +28,8 @@ export const LiveRecords = memo(function LiveRecords({
   signalHistory,
   activeSignals,
   messageRate,
+  onShowOnMap,
+  isNativeApp = false,
 }: LiveRecordsProps) {
   const getAircraftLabel = (aircraft: any) => {
     return aircraft.flight || aircraft.r || registration_from_hexid(aircraft.hex) || aircraft.hex
@@ -54,8 +59,28 @@ export const LiveRecords = memo(function LiveRecords({
                 </div>
                 <span className="text-sm font-semibold text-orange-400">Fastest</span>
               </div>
-              <div className="px-2 py-1 bg-orange-500/20 rounded-lg">
-                <Plane className="w-4 h-4 text-orange-400" />
+              <div className="flex items-center gap-2">
+                <div className="px-2 py-1 bg-orange-500/20 rounded-lg">
+                  <Plane className="w-4 h-4 text-orange-400" />
+                </div>
+                {/* Locate Button */}
+                {isNativeApp && onShowOnMap && stats.fastest.lat && stats.fastest.lon && (() => {
+                  const fastest = stats.fastest
+                  return (
+                    <button
+                      onClick={async () => {
+                        if (fastest) {
+                          await haptic.light()
+                          onShowOnMap(fastest.hex)
+                        }
+                      }}
+                      className="p-2 bg-orange-500/20 hover:bg-orange-500/30 active:bg-orange-500/40 border border-orange-500/40 rounded-lg transition-all active:scale-95 shadow-sm"
+                      title="Locate on map"
+                    >
+                      <Locate className="w-4 h-4 text-orange-400" />
+                    </button>
+                  )
+                })()}
               </div>
             </div>
             <div className="text-xl font-bold text-white mb-1">
@@ -88,8 +113,30 @@ export const LiveRecords = memo(function LiveRecords({
                 </div>
                 <span className="text-sm font-semibold text-blue-400">Highest</span>
               </div>
-              <div className="px-2 py-1 bg-blue-500/20 rounded-lg text-xs text-blue-300 font-mono">
-                FL{Math.floor((stats.highest.alt_baro || 0) / 100)}
+              <div className="flex items-center gap-2">
+                <div className="px-2 py-1 bg-blue-500/20 rounded-lg text-xs text-blue-300 font-mono">
+                  FL{Math.floor((stats.highest.alt_baro || 0) / 100)}
+                </div>
+                {/* Locate Button */}
+                {isNativeApp && onShowOnMap && stats.highest.lat && stats.highest.lon && (() => {
+                  const highest = stats.highest
+                  return (
+                    <button
+                      onClick={() => {
+                        if (highest) {
+                          onShowOnMap(highest.hex)
+                          if ((window as any).Capacitor?.Plugins?.Haptics) {
+                            (window as any).Capacitor.Plugins.Haptics.impact({ style: 'light' })
+                          }
+                        }
+                      }}
+                      className="p-2 bg-blue-500/20 hover:bg-blue-500/30 active:bg-blue-500/40 border border-blue-500/40 rounded-lg transition-all active:scale-95 shadow-sm"
+                      title="Locate on map"
+                    >
+                      <Locate className="w-4 h-4 text-blue-400" />
+                    </button>
+                  )
+                })()}
               </div>
             </div>
             <div className="text-xl font-bold text-white mb-1">
@@ -122,8 +169,30 @@ export const LiveRecords = memo(function LiveRecords({
                 </div>
                 <span className="text-sm font-semibold text-green-400">Most Active</span>
               </div>
-              <div className="px-2 py-1 bg-green-500/20 rounded-lg text-xs text-green-300 font-mono">
-                {stats.mostMessages.messages} MSG
+              <div className="flex items-center gap-2">
+                <div className="px-2 py-1 bg-green-500/20 rounded-lg text-xs text-green-300 font-mono">
+                  {stats.mostMessages.messages} MSG
+                </div>
+                {/* Locate Button */}
+                {isNativeApp && onShowOnMap && stats.mostMessages.lat && stats.mostMessages.lon && (() => {
+                  const mostMessages = stats.mostMessages
+                  return (
+                    <button
+                      onClick={() => {
+                        if (mostMessages) {
+                          onShowOnMap(mostMessages.hex)
+                          if ((window as any).Capacitor?.Plugins?.Haptics) {
+                            (window as any).Capacitor.Plugins.Haptics.impact({ style: 'light' })
+                          }
+                        }
+                      }}
+                      className="p-2 bg-green-500/20 hover:bg-green-500/30 active:bg-green-500/40 border border-green-500/40 rounded-lg transition-all active:scale-95 shadow-sm"
+                      title="Locate on map"
+                    >
+                      <Locate className="w-4 h-4 text-green-400" />
+                    </button>
+                  )
+                })()}
               </div>
             </div>
             <div className="text-xl font-bold text-white mb-1">

@@ -19,21 +19,20 @@ const config: CapacitorConfig = {
   },
   plugins: {
     SplashScreen: {
-      launchShowDuration: 2000,
+      launchShowDuration: 500, // Reduced to minimum to show our custom splash only
+      launchAutoHide: true,
+      backgroundColor: '#0f172a', // Match our splash screen background
       showSpinner: false,
       androidSpinnerStyle: 'small',
       iosSpinnerStyle: 'small',
       splashFullScreen: true,
       splashImmersive: true,
-      androidScaleType: 'CENTER_CROP'
+      androidScaleType: 'CENTER_CROP',
+      androidSplashResourceName: 'splash' // Use the existing splash resource as a fallback
     },
     StatusBar: {
       style: 'dark',
       backgroundColor: '#0f172a'
-    },
-    App: {
-      // Optimize app lifecycle
-      appRestoredResult: false
     }
   }
 };

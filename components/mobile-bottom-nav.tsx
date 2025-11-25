@@ -1,13 +1,14 @@
 "use client"
 
-import { Home, BarChart3, Plane, TrendingUp, Search, Filter, Radar } from "lucide-react"
+import { Plane, TrendingUp, Search, Filter, Radar, MapIcon, Grid3x3 } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
-import { Haptics, ImpactStyle } from "@capacitor/haptics"
+import { haptic } from "@/lib/haptics"
 import { PixelWave } from "./pixel-wave"
-import { useState, useRef } from "react"
+import { useState, useRef, useEffect } from "react"
+import { Keyboard } from "@capacitor/keyboard"
 
-export type MobileTab = "home" | "stats" | "flights" | "charts"
+export type MobileTab = "home" | "stats" | "flights" | "miniapps" | "charts" | "map"
 
 interface MobileBottomNavProps {
   activeTab: MobileTab
@@ -18,12 +19,14 @@ interface MobileBottomNavProps {
   onFilterClick?: () => void
   hasActiveFilters?: boolean
   onHomeRefresh?: () => Promise<void>
+  miniAppIcon?: string | null
 }
 
-export function MobileBottomNav({ activeTab, onTabChange, isNativeApp = false, searchTerm = "", onSearchChange, onFilterClick, hasActiveFilters = false, onHomeRefresh }: MobileBottomNavProps) {
+export function MobileBottomNav({ activeTab, onTabChange, isNativeApp = false, searchTerm = "", onSearchChange, onFilterClick, hasActiveFilters = false, onHomeRefresh, miniAppIcon }: MobileBottomNavProps) {
   const [isHomeRefreshing, setIsHomeRefreshing] = useState(false)
   const [showPixelWave, setShowPixelWave] = useState(false)
   const [isFadingOut, setIsFadingOut] = useState(false)
+  const [keyboardHeight, setKeyboardHeight] = useState(0)
   const holdTimerRef = useRef<NodeJS.Timeout | null>(null)
   const isHoldingRef = useRef(false)
 
@@ -32,30 +35,57 @@ export function MobileBottomNav({ activeTab, onTabChange, isNativeApp = false, s
     return null
   }
 
+  // Keyboard management
+  useEffect(() => {
+    if (!isNativeApp) return
+
+    let keyboardWillShowListener: any = null
+    let keyboardWillHideListener: any = null
+
+    Keyboard.addListener('keyboardWillShow', (info) => {
+      setKeyboardHeight(info.keyboardHeight)
+    }).then(handle => {
+      keyboardWillShowListener = handle
+    })
+
+    Keyboard.addListener('keyboardWillHide', () => {
+      setKeyboardHeight(0)
+    }).then(handle => {
+      keyboardWillHideListener = handle
+    })
+
+    // Set keyboard behavior
+    Keyboard.setAccessoryBarVisible({ isVisible: true })
+    Keyboard.setScroll({ isDisabled: false })
+
+    return () => {
+      if (keyboardWillShowListener) {
+        keyboardWillShowListener.remove()
+      }
+      if (keyboardWillHideListener) {
+        keyboardWillHideListener.remove()
+      }
+    }
+  }, [isNativeApp])
+
   const tabs = [
     { id: "flights" as MobileTab, icon: Plane, label: "Flights" },
+    { id: "miniapps" as MobileTab, icon: Grid3x3, label: "Mini Apps" },
     { id: "home" as MobileTab, icon: Radar, label: "Home" },
+    { id: "map" as MobileTab, icon: MapIcon, label: "Map" },
     { id: "charts" as MobileTab, icon: TrendingUp, label: "Charts" },
   ]
 
-  const handleTabClick = async (tab: MobileTab) => {
+  const handleTabClick = (tab: MobileTab) => {
     if (tab !== activeTab) {
-      // Haptic feedback on tab switch
-      try {
-        await Haptics.impact({ style: ImpactStyle.Light })
-      } catch (e) {
-        // Haptics not available
-      }
+      // Haptic feedback on tab switch (non-blocking)
+      haptic.light()
       onTabChange(tab)
     }
   }
 
-  const handleFilterClick = async () => {
-    try {
-      await Haptics.impact({ style: ImpactStyle.Medium })
-    } catch (e) {
-      // Haptics not available
-    }
+  const handleFilterClick = () => {
+    haptic.medium()
     onFilterClick?.()
   }
 
@@ -63,10 +93,8 @@ export function MobileBottomNav({ activeTab, onTabChange, isNativeApp = false, s
     isHoldingRef.current = true
     holdTimerRef.current = setTimeout(async () => {
       if (isHoldingRef.current && onHomeRefresh) {
-        // Trigger haptic feedback
-        try {
-          await Haptics.impact({ style: ImpactStyle.Heavy })
-        } catch (e) {}
+        // Trigger haptic feedback for long-press action
+        await haptic.heavy()
 
         setShowPixelWave(true)
         setIsHomeRefreshing(true)
@@ -121,7 +149,12 @@ export function MobileBottomNav({ activeTab, onTabChange, isNativeApp = false, s
         </div>
       )}
 
-      <div className="fixed bottom-0 left-0 right-0 z-50 bg-gradient-to-t from-slate-900/70 via-slate-900/60 to-slate-900/50 backdrop-blur-[40px] border-t border-white/5 shadow-2xl shadow-black/20">
+      <div
+        className="fixed left-0 right-0 z-50 bg-gradient-to-t from-slate-900/70 via-slate-900/60 to-slate-900/50 backdrop-blur-[40px] border-t border-white/5 shadow-2xl shadow-black/20 transition-all duration-300"
+        style={{
+          bottom: keyboardHeight > 0 ? `${keyboardHeight}px` : '0'
+        }}
+      >
         {/* Search Bar - Only show on flights tab */}
         {activeTab === "flights" && onSearchChange && (
           <div className="px-4 py-3 border-b border-white/5 backdrop-blur-sm animate-in fade-in slide-in-from-bottom-2 duration-200">
@@ -154,11 +187,13 @@ export function MobileBottomNav({ activeTab, onTabChange, isNativeApp = false, s
         )}
 
         {/* Tab Navigation */}
-        <div className="grid grid-cols-3 pb-safe">
+        <div className="grid grid-cols-5 pb-safe">
           {tabs.map((tab) => {
             const isActive = activeTab === tab.id
             const Icon = tab.icon
             const isRadar = tab.id === "home"
+            const isMiniApps = tab.id === "miniapps"
+            const showCustomIcon = isMiniApps && miniAppIcon
 
             return (
               <button
@@ -178,8 +213,17 @@ export function MobileBottomNav({ activeTab, onTabChange, isNativeApp = false, s
                   willChange: isActive ? "auto" : "transform",
                 }}
               >
-                <Icon className={`w-6 h-6 transition-all duration-150 ${isActive && !isRadar ? "fill-blue-400 scale-110" : isActive ? "scale-110" : "scale-100"} ${isHomeRefreshing && isRadar ? "animate-spin" : ""}`}
-                  style={{ willChange: "transform" }} />
+                {showCustomIcon ? (
+                  <img
+                    src={miniAppIcon}
+                    alt="Mini app icon"
+                    className={`w-6 h-6 rounded-lg transition-all duration-150 ${isActive ? "scale-110" : "scale-100"}`}
+                    style={{ willChange: "transform" }}
+                  />
+                ) : (
+                  <Icon className={`w-6 h-6 transition-all duration-150 ${isActive && !isRadar ? "fill-blue-400 scale-110" : isActive ? "scale-110" : "scale-100"} ${isHomeRefreshing && isRadar ? "animate-spin" : ""}`}
+                    style={{ willChange: "transform" }} />
+                )}
                 <span className={`text-[10px] font-medium transition-opacity duration-150 ${isActive ? "opacity-100" : "opacity-80"}`}>
                   {tab.label}
                 </span>
