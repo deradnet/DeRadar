@@ -25,7 +25,7 @@ function aircraftArrayEqual(a: Aircraft[], b: Aircraft[]): boolean {
   return true
 }
 
-export function useAircraftData() {
+export function useAircraftData(updateInterval: number = 5000) {
   const [aircraft, setAircraft] = useState<Aircraft[]>([])
   const [stats, setStats] = useState<AircraftStats>({
     fastest: null,
@@ -115,11 +115,11 @@ export function useAircraftData() {
     // Initial fetch
     fetchData()
 
-    // Set up interval for live updates - 5 seconds for better performance
-    const interval = setInterval(fetchData, 5000)
+    // Set up interval for live updates with dynamic interval
+    const interval = setInterval(fetchData, updateInterval)
 
     return () => clearInterval(interval)
-  }, [])
+  }, [updateInterval, fetchData])
 
   return { aircraft, stats, alerts, isLoading, refresh: fetchData }
 }

@@ -32,7 +32,10 @@ const DEFAULT_FILTERS: FlightFilters = {
 }
 
 export default function DeradFlightTracker() {
-  const { aircraft, stats, alerts, refresh } = useAircraftData()
+  const [activeMobileTab, setActiveMobileTab] = useState<MobileTab>("home")
+
+  // Keep data fetching at 1 second for real-time updates
+  const { aircraft, stats, alerts, refresh } = useAircraftData(1000)
   const [selectedFlight, setSelectedFlight] = useState<SelectedFlight | null>(null)
   const [searchTerm, setSearchTerm] = useState("")
   const [filters, setFilters] = useState<FlightFilters>(DEFAULT_FILTERS)
@@ -40,7 +43,6 @@ export default function DeradFlightTracker() {
   const lastUpdateRef = useRef(new Date())
   const [isMobile, setIsMobile] = useState(false)
   const [isNativeApp, setIsNativeApp] = useState(false)
-  const [activeMobileTab, setActiveMobileTab] = useState<MobileTab>("home")
   const [swipeStartX, setSwipeStartX] = useState(0)
   const [swipeStartY, setSwipeStartY] = useState(0)
   const [highlightedAircraftHex, setHighlightedAircraftHex] = useState<string | null>(null)
@@ -448,6 +450,7 @@ export default function DeradFlightTracker() {
               setHighlightedAircraftHex(hex)
               setActiveMobileTab("map")
             }}
+            onFlightSelect={handleFlightSelect}
             isNativeApp={isNativeApp}
           />
         )}

@@ -32,6 +32,7 @@ android/*.iml
 android/gradlew
 android/gradlew.bat
 android/gradle/
+android/app/google-services.json
 
 ios/App/Pods/
 ios/App/build/

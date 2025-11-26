@@ -1,4 +1,6 @@
 apply plugin: 'com.android.application'
+apply plugin: 'com.google.firebase.crashlytics'
+apply plugin: 'com.google.firebase.firebase-perf'
 
 android {
     namespace "network.derad.deradar"
@@ -7,8 +9,8 @@ android {
         applicationId "network.derad.deradar"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.0"
+        versionCode 3
+        versionName "1.0.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
 
         // Enable native rendering optimizations
@@ -49,6 +51,11 @@ android {
             // Enable R8 full mode for maximum optimization
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
             signingConfig signingConfigs.debug
+
+            // Upload native debug symbols to Play Console and Crashlytics
+            ndk {
+                debugSymbolLevel 'FULL'
+            }
         }
         debug {
             minifyEnabled false
@@ -77,6 +84,18 @@ dependencies {
     androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
     androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
     implementation project(':capacitor-cordova-android-plugins')
+
+    // Firebase BoM - ensures compatible versions
+    implementation platform('com.google.firebase:firebase-bom:34.6.0')
+
+    // Firebase Analytics
+    implementation 'com.google.firebase:firebase-analytics'
+
+    // Firebase Crashlytics for crash reporting
+    implementation 'com.google.firebase:firebase-crashlytics'
+
+    // Firebase Performance Monitoring
+    implementation 'com.google.firebase:firebase-perf'
 }
 
 apply from: 'capacitor.build.gradle'

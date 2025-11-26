@@ -15,6 +15,7 @@ interface LiveRecordsProps {
   activeSignals: number
   messageRate: string
   onShowOnMap?: (hex: string) => void
+  onFlightSelect?: (flight: any) => void
   isNativeApp?: boolean
 }
 
@@ -29,6 +30,7 @@ export const LiveRecords = memo(function LiveRecords({
   activeSignals,
   messageRate,
   onShowOnMap,
+  onFlightSelect,
   isNativeApp = false,
 }: LiveRecordsProps) {
   const getAircraftLabel = (aircraft: any) => {
@@ -41,7 +43,15 @@ export const LiveRecords = memo(function LiveRecords({
 
       {/* Fastest Aircraft */}
       {stats.fastest && (
-        <div className="relative bg-gradient-to-br from-orange-500/10 to-orange-600/10 backdrop-blur-sm rounded-xl p-4 border border-orange-500/30 overflow-hidden">
+        <div
+          className="relative bg-gradient-to-br from-orange-500/10 to-orange-600/10 backdrop-blur-sm rounded-xl p-4 border border-orange-500/30 overflow-hidden cursor-pointer hover:border-orange-500/50 transition-all active:scale-[0.98]"
+          onClick={async () => {
+            if (onFlightSelect && stats.fastest) {
+              await haptic.light()
+              onFlightSelect(stats.fastest)
+            }
+          }}
+        >
           {aircraftImages[stats.fastest.hex] && (
             <div className="absolute inset-0 opacity-10">
               <img
@@ -68,7 +78,8 @@ export const LiveRecords = memo(function LiveRecords({
                   const fastest = stats.fastest
                   return (
                     <button
-                      onClick={async () => {
+                      onClick={async (e) => {
+                        e.stopPropagation()
                         if (fastest) {
                           await haptic.light()
                           onShowOnMap(fastest.hex)
@@ -95,7 +106,15 @@ export const LiveRecords = memo(function LiveRecords({
 
       {/* Highest Aircraft */}
       {stats.highest && (
-        <div className="relative bg-gradient-to-br from-blue-500/10 to-blue-600/10 backdrop-blur-sm rounded-xl p-4 border border-blue-500/30 overflow-hidden">
+        <div
+          className="relative bg-gradient-to-br from-blue-500/10 to-blue-600/10 backdrop-blur-sm rounded-xl p-4 border border-blue-500/30 overflow-hidden cursor-pointer hover:border-blue-500/50 transition-all active:scale-[0.98]"
+          onClick={async () => {
+            if (onFlightSelect && stats.highest) {
+              await haptic.light()
+              onFlightSelect(stats.highest)
+            }
+          }}
+        >
           {aircraftImages[stats.highest.hex] && (
             <div className="absolute inset-0 opacity-10">
               <img
@@ -122,7 +141,8 @@ export const LiveRecords = memo(function LiveRecords({
                   const highest = stats.highest
                   return (
                     <button
-                      onClick={() => {
+                      onClick={(e) => {
+                        e.stopPropagation()
                         if (highest) {
                           onShowOnMap(highest.hex)
                           if ((window as any).Capacitor?.Plugins?.Haptics) {
@@ -151,7 +171,15 @@ export const LiveRecords = memo(function LiveRecords({
 
       {/* Most Active Aircraft */}
       {stats.mostMessages && (
-        <div className="relative bg-gradient-to-br from-green-500/10 to-green-600/10 backdrop-blur-sm rounded-xl p-4 border border-green-500/30 overflow-hidden">
+        <div
+          className="relative bg-gradient-to-br from-green-500/10 to-green-600/10 backdrop-blur-sm rounded-xl p-4 border border-green-500/30 overflow-hidden cursor-pointer hover:border-green-500/50 transition-all active:scale-[0.98]"
+          onClick={async () => {
+            if (onFlightSelect && stats.mostMessages) {
+              await haptic.light()
+              onFlightSelect(stats.mostMessages)
+            }
+          }}
+        >
           {aircraftImages[stats.mostMessages.hex] && (
             <div className="absolute inset-0 opacity-10">
               <img
@@ -178,7 +206,8 @@ export const LiveRecords = memo(function LiveRecords({
                   const mostMessages = stats.mostMessages
                   return (
                     <button
-                      onClick={() => {
+                      onClick={(e) => {
+                        e.stopPropagation()
                         if (mostMessages) {
                           onShowOnMap(mostMessages.hex)
                           if ((window as any).Capacitor?.Plugins?.Haptics) {

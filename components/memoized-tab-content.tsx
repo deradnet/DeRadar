@@ -22,7 +22,9 @@ export const HomeTabContent = memo(function HomeTabContent({
   emergencyHistory,
   signalHistory,
   onShowOnMap,
+  onFlightSelect,
   isNativeApp,
+  isActive = true,
 }: {
   stats: AircraftStats
   emergencyCount: number
@@ -34,8 +36,13 @@ export const HomeTabContent = memo(function HomeTabContent({
   emergencyHistory: { time: number; count: number }[]
   signalHistory: { time: number; value: number; aircraft: string }[]
   onShowOnMap?: (hex: string) => void
+  onFlightSelect?: (flight: any) => void
   isNativeApp: boolean
+  isActive?: boolean
 }) {
+  // Skip rendering if inactive to save resources
+  if (!isActive) return null
+
   return (
     <>
       <StatsOverview
@@ -59,6 +66,7 @@ export const HomeTabContent = memo(function HomeTabContent({
           activeSignals={activeSignals}
           messageRate={messageRate}
           onShowOnMap={onShowOnMap}
+          onFlightSelect={onFlightSelect}
           isNativeApp={isNativeApp}
         />
       </div>
