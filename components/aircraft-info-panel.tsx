@@ -24,7 +24,6 @@ interface PhotoMetadata {
 export function AircraftInfoPanel({ selectedFlight, onClose, onShowOnMap }: AircraftInfoPanelProps) {
   const [aircraftImage, setAircraftImage] = useState<string | null>(null)
   const [photoMetadata, setPhotoMetadata] = useState<PhotoMetadata | null>(null)
-  const [svgImage, setSvgImage] = useState<string | null>(null)
   const [isSharing, setIsSharing] = useState(false)
   const [showPreview, setShowPreview] = useState(false)
   const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null)
@@ -35,7 +34,6 @@ export function AircraftInfoPanel({ selectedFlight, onClose, onShowOnMap }: Airc
     // Reset images when aircraft changes
     setAircraftImage(null)
     setPhotoMetadata(null)
-    setSvgImage(null)
 
     const loadImages = async () => {
       // Load Planespotters photo
@@ -70,47 +68,10 @@ export function AircraftInfoPanel({ selectedFlight, onClose, onShowOnMap }: Airc
           console.log("Planespotters image not available")
         }
       }
-
-      // Load SVG from ADSB2PNG
-      if (selectedFlight.lat && selectedFlight.lng) {
-        try {
-          // Determine aircraft type
-          let aircraftType = 'airliner'
-          if (selectedFlight.type) {
-            const typeUpper = selectedFlight.type.toUpperCase()
-            if (typeUpper.includes('HELI') || typeUpper.includes('H-') || (typeUpper.includes('EC') && typeUpper.length <= 4)) {
-              aircraftType = 'helicopter'
-            } else if (typeUpper.includes('B7') || typeUpper.includes('A3') || typeUpper.includes('B77') || typeUpper.includes('A388')) {
-              aircraftType = 'airliner'
-            } else if (typeUpper.includes('C1') || typeUpper.includes('GLF') || typeUpper.includes('CL6')) {
-              aircraftType = 'bizjet'
-            }
-          }
-
-          const svgUrl = `https://svg-api.deradar.app/?location=${selectedFlight.lat},${selectedFlight.lng}&type=${aircraftType}&heading=${selectedFlight.heading}`
-          const svgResponse = await fetch(svgUrl)
-
-          if (svgResponse.ok) {
-            const svgText = await svgResponse.text()
-            const svgBlob = new Blob([svgText], { type: 'image/svg+xml' })
-            const svgObjectUrl = URL.createObjectURL(svgBlob)
-            setSvgImage(svgObjectUrl)
-          }
-        } catch (error) {
-          console.log("SVG image not available")
-        }
-      }
     }
 
     loadImages()
-
-    // Cleanup SVG object URL on unmount
-    return () => {
-      if (svgImage) {
-        URL.revokeObjectURL(svgImage)
-      }
-    }
-  }, [selectedFlight.hex, selectedFlight.registration, selectedFlight.lat, selectedFlight.lng, selectedFlight.heading, selectedFlight.type])
+  }, [selectedFlight.hex, selectedFlight.registration])
 
   const handleShare = async () => {
     console.log('Share button clicked!')
@@ -240,87 +201,57 @@ export function AircraftInfoPanel({ selectedFlight, onClose, onShowOnMap }: Airc
 
         {/* Content */}
         <div className="overflow-y-auto max-h-[calc(85vh-3rem)] pb-6">
-          {/* Aircraft Images - Side by Side */}
-          {(aircraftImage || svgImage) && (
-            <div className={`grid gap-2 px-2 pt-2 ${aircraftImage && svgImage ? 'grid-cols-2' : 'grid-cols-1'}`}>
-              {/* Planespotters Photo */}
-              {aircraftImage && photoMetadata && (
-                <div className="relative bg-slate-800 rounded-lg overflow-hidden">
-                  <img
-                    src={aircraftImage}
-                    alt="Aircraft Photo"
-                    className="w-full h-48 object-cover"
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-t from-slate-900/90 via-transparent to-transparent" />
-                  <div className="absolute bottom-0 left-0 right-0 p-2">
-                    <div className="flex items-center justify-between gap-1">
-                      <p className="text-[10px] text-slate-300 truncate">
-                        © {photoMetadata.photographer}
-                      </p>
-                      <a
-                        href={photoMetadata.link}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        onClick={async (e) => {
-                          e.preventDefault()
-                          e.stopPropagation()
-                          await haptic.light()
+          {/* Aircraft Image */}
+          {aircraftImage && photoMetadata && (
+            <div className="px-2 pt-2">
+              <div className="relative bg-slate-800 rounded-lg overflow-hidden">
+                <img
+                  src={aircraftImage}
+                  alt="Aircraft Photo"
+                  className="w-full h-48 object-cover"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-slate-900/90 via-transparent to-transparent" />
+                <div className="absolute bottom-0 left-0 right-0 p-2">
+                  <div className="flex items-center justify-between gap-1">
+                    <p className="text-[10px] text-slate-300 truncate">
+                      © {photoMetadata.photographer}
+                    </p>
+                    <a
+                      href={photoMetadata.link}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={async (e) => {
+                        e.preventDefault()
+                        e.stopPropagation()
+                        await haptic.light()
 
-                          // Check if running on native platform
-                          const isNative = typeof (window as any).Capacitor !== 'undefined'
+                        // Check if running on native platform
+                        const isNative = typeof (window as any).Capacitor !== 'undefined'
 
-                          if (isNative) {
-                            // Use Capacitor Browser plugin to open in external browser
-                            try {
-                              const { Browser } = await import('@capacitor/browser')
-                              await Browser.open({ url: photoMetadata.link })
-                            } catch (error) {
-                              console.error('Failed to open browser:', error)
-                              // Fallback to window.open
-                              window.open(photoMetadata.link, '_blank', 'noopener,noreferrer')
-                            }
-                          } else {
-                            // Web: open in new tab
+                        if (isNative) {
+                          // Use Capacitor Browser plugin to open in external browser
+                          try {
+                            const { Browser } = await import('@capacitor/browser')
+                            await Browser.open({ url: photoMetadata.link })
+                          } catch (error) {
+                            console.error('Failed to open browser:', error)
+                            // Fallback to window.open
                             window.open(photoMetadata.link, '_blank', 'noopener,noreferrer')
                           }
-                        }}
-                        className="flex items-center gap-1 px-1.5 py-0.5 bg-blue-500/20 hover:bg-blue-500/30 border border-blue-500/40 rounded text-[10px] text-blue-300 transition-colors flex-shrink-0"
-                        title="View original photo"
-                      >
-                        <ExternalLink className="w-2.5 h-2.5" />
-                        <span>Photo</span>
-                      </a>
-                    </div>
+                        } else {
+                          // Web: open in new tab
+                          window.open(photoMetadata.link, '_blank', 'noopener,noreferrer')
+                        }
+                      }}
+                      className="flex items-center gap-1 px-1.5 py-0.5 bg-blue-500/20 hover:bg-blue-500/30 border border-blue-500/40 rounded text-[10px] text-blue-300 transition-colors flex-shrink-0"
+                      title="View original photo"
+                    >
+                      <ExternalLink className="w-2.5 h-2.5" />
+                      <span>Photo</span>
+                    </a>
                   </div>
                 </div>
-              )}
-
-              {/* SVG from DeRadar API */}
-              {svgImage && (
-                <div
-                  className="relative bg-slate-800 rounded-lg overflow-hidden cursor-pointer hover:bg-slate-700 transition-colors"
-                  onClick={async () => {
-                    if (onShowOnMap && selectedFlight.lat && selectedFlight.lng) {
-                      await haptic.light()
-                      onShowOnMap(selectedFlight.hex)
-                    }
-                  }}
-                  title="Show on map"
-                >
-                  <img
-                    src={svgImage}
-                    alt="Aircraft Visualization"
-                    className="w-full h-48 object-cover"
-                  />
-                  <div className="absolute bottom-0 left-0 right-0 p-2">
-                    <div className="flex items-center justify-center">
-                      <div className="px-2 py-0.5 bg-purple-500/20 border border-purple-500/40 rounded text-[10px] text-purple-300">
-                        Live Position
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
+              </div>
             </div>
           )}
 

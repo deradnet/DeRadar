@@ -1,0 +1,72 @@
+
+> DeRadar@1.1.0 build
+> next build
+
+ ⚠ Warning: Next.js inferred your workspace root, but it may not be correct.
+ We detected multiple lockfiles and selected the directory of /Users/dev/package-lock.json as the root directory.
+ To silence this warning, set `turbopack.root` in your Next.js config, or consider removing one of the lockfiles if it's not needed.
+   See https://nextjs.org/docs/app/api-reference/config/next-config-js/turbopack#root-directory for more information.
+ Detected additional lockfiles: 
+   * /Users/dev/DeRadar/package-lock.json
+
+   ▲ Next.js 16.0.4 (Turbopack)
+   - Experiments (use with caution):
+     · optimizePackageImports
+
+   Creating an optimized production build ...
+ ✓ Compiled successfully in 2.0s
+   Running TypeScript ...
+   Collecting page data using 9 workers ...
+   Generating static pages using 9 workers (0/4) ...
+   Generating static pages using 9 workers (1/4) 
+   Generating static pages using 9 workers (2/4) 
+   Generating static pages using 9 workers (3/4) 
+ ✓ Generating static pages using 9 workers (4/4) in 170.2ms
+   Finalizing page optimization ...
+
+Route (app)
+┌ ○ /
+├ ○ /_not-found
+└ ○ /test
+
+
+○  (Static)  prerendered as static content
+
+
+> DeRadar@1.1.0 build
+> next build
+
+ ⚠ Invalid next.config.mjs options detected: 
+ ⚠     Unrecognized key(s) in object: 'removeComments' at "compiler"
+ ⚠     Unrecognized key(s) in object: 'optimizeFonts'
+ ⚠ See more info here: https://nextjs.org/docs/messages/invalid-next-config
+ ⚠ Warning: Next.js inferred your workspace root, but it may not be correct.
+ We detected multiple lockfiles and selected the directory of /Users/dev/package-lock.json as the root directory.
+ To silence this warning, set `turbopack.root` in your Next.js config, or consider removing one of the lockfiles if it's not needed.
+   See https://nextjs.org/docs/app/api-reference/config/next-config-js/turbopack#root-directory for more information.
+ Detected additional lockfiles: 
+   * /Users/dev/DeRadar/package-lock.json
+
+   ▲ Next.js 16.0.4 (Turbopack)
+   - Experiments (use with caution):
+     · optimizePackageImports
+
+   Creating an optimized production build ...
+ ✓ Compiled successfully in 1959.1ms
+   Running TypeScript ...
+   Collecting page data using 9 workers ...
+   Generating static pages using 9 workers (0/4) ...
+   Generating static pages using 9 workers (1/4) 
+   Generating static pages using 9 workers (2/4) 
+   Generating static pages using 9 workers (3/4) 
+ ✓ Generating static pages using 9 workers (4/4) in 179.1ms
+   Finalizing page optimization ...
+
+Route (app)
+┌ ○ /
+├ ○ /_not-found
+└ ○ /test
+
+
+○  (Static)  prerendered as static content
+

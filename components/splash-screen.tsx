@@ -75,12 +75,10 @@ export function SplashScreen({ onFinish }: SplashScreenProps) {
                   <motion.div
                     animate={{ rotate: 360 }}
                     transition={{ duration: 4, repeat: Infinity, ease: "linear" }}
-                    className="absolute inset-0"
+                    className="absolute inset-0 flex items-center justify-center"
                   >
-                    {/* Radar sweep line */}
-                    <div className="absolute top-1/2 left-1/2 w-16 h-0.5 bg-gradient-to-r from-transparent via-white to-transparent transform -translate-y-1/2 origin-left" />
-                    {/* Radar sweep dot */}
-                    <div className="absolute top-1/2 left-1/2 w-1 h-1 bg-white rounded-full transform -translate-x-1/2 -translate-y-1/2" />
+                    {/* Radar sweep line - rotates from center */}
+                    <div className="absolute w-20 h-0.5 bg-gradient-to-r from-white/80 via-white/40 to-transparent" style={{ transformOrigin: '0% 50%' }} />
                   </motion.div>
 
                   {/* Radar icon */}

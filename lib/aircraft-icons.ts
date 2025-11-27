@@ -1,11 +1,66 @@
 /**
- * Minimal aircraft-icon library.
+ * Minimal aircraft-icon library with icon caching for performance.
  * Only the shapes we really use (airliner | fighter | heavy | cessna | glider | helicopter | unknown).
  */
 
 export interface AircraftShape {
   viewBox: string
   path: string
+}
+
+// ============================================================================
+// ICON CACHING SYSTEM - Prevents regenerating identical SVG icons
+// ============================================================================
+
+// SVG string cache - stores generated SVG strings by property hash
+const SVG_CACHE = new Map<string, string>()
+
+// LRU tracking for cache eviction
+const cacheAccessOrder: string[] = []
+const MAX_CACHE_SIZE = 500
+
+/**
+ * Generate cache key from aircraft properties
+ * Rounds rotation to nearest 10° to maximize cache hits
+ */
+function getCacheKey(
+  shapeKey: string,
+  color: string,
+  heading: number,
+  isSelected: boolean
+): string {
+  const roundedHeading = Math.round(heading / 10) * 10
+  return `${shapeKey}-${color}-${roundedHeading}-${isSelected ? '1' : '0'}`
+}
+
+/**
+ * Get cached SVG or generate new one
+ * Implements LRU eviction to prevent memory bloat
+ */
+function getCachedSVG(key: string, generator: () => string): string {
+  // Cache hit
+  if (SVG_CACHE.has(key)) {
+    // Update LRU - move to end
+    const index = cacheAccessOrder.indexOf(key)
+    if (index > -1) {
+      cacheAccessOrder.splice(index, 1)
+    }
+    cacheAccessOrder.push(key)
+    return SVG_CACHE.get(key)!
+  }
+
+  // Cache miss - generate SVG
+  const svg = generator()
+  SVG_CACHE.set(key, svg)
+  cacheAccessOrder.push(key)
+
+  // LRU eviction if cache too large
+  if (SVG_CACHE.size > MAX_CACHE_SIZE) {
+    const oldestKey = cacheAccessOrder.shift()!
+    SVG_CACHE.delete(oldestKey)
+  }
+
+  return svg
 }
 
 export const aircraftShapes: Record<string, AircraftShape> = {
@@ -41,6 +96,7 @@ export const aircraftShapes: Record<string, AircraftShape> = {
 
 /**
  * Create an SVG string for a flight according to its properties.
+ * Now with intelligent caching to prevent redundant SVG generation.
  */
 export function createAircraftIcon(
   aircraft: { t?: string; category?: string; track?: number; alt_baro?: number; gs?: number; emergency?: string },
@@ -50,7 +106,7 @@ export function createAircraftIcon(
   const isEmergency = aircraft.emergency && aircraft.emergency !== "none"
   const isOnGround = (aircraft.alt_baro || 0) < 100
 
-  // default
+  // Determine shape key
   let shapeKey: keyof typeof aircraftShapes = "unknown"
 
   if (aircraft.t) {
@@ -72,6 +128,7 @@ export function createAircraftIcon(
     else if (c === "B1") shapeKey = "glider"
   }
 
+  // Determine color
   let color = "#FFD700"
   if (isEmergency) color = "#FF4444"
   else if (isOnGround) color = "#888888"
@@ -79,11 +136,17 @@ export function createAircraftIcon(
   else if ((aircraft.gs || 0) > 400) color = "#FF8800"
   if (isSelected) color = "#00FF00"
 
-  const shape = aircraftShapes[shapeKey]
-  return `
+  // Generate cache key and check cache
+  const cacheKey = getCacheKey(shapeKey, color, heading, isSelected)
+
+  return getCachedSVG(cacheKey, () => {
+    // This function only runs on cache miss
+    const shape = aircraftShapes[shapeKey]
+    return `
 <svg width="24" height="24" viewBox="${shape.viewBox}" style="transform:rotate(${heading}deg)">
   <path d="${shape.path}" fill="${color}" stroke="#000" stroke-width="0.5" opacity="0.9"/>
   ${isSelected ? '<circle cx="0" cy="0" r="12" fill="none" stroke="' + color + '" stroke-width="1" opacity="0.6"/>' : ""}
 </svg>
 `.trim()
+  })
 }

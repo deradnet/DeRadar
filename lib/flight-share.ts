@@ -27,24 +27,24 @@ export async function generateFlightShareImage(
   const ctx = canvas.getContext('2d')
   if (!ctx) throw new Error('Could not get canvas context')
 
-  // Canvas dimensions (square for social media)
-  const width = 1080
-  const height = 1080
+  // Canvas dimensions (larger for better readability on small screens)
+  const width = 1200
+  const height = 1600  // Taller for better layout
   canvas.width = width
   canvas.height = height
 
-  // Apple-style smooth gradient background
+  // Modern gradient background with depth
   const gradient = ctx.createLinearGradient(0, 0, 0, height)
   gradient.addColorStop(0, colors.gradient.start)
-  gradient.addColorStop(0.5, colors.gradient.mid)
+  gradient.addColorStop(0.4, colors.gradient.mid)
   gradient.addColorStop(1, colors.gradient.end)
   ctx.fillStyle = gradient
   ctx.fillRect(0, 0, width, height)
 
-  // Soft radial overlay for depth
-  const radialGlow = ctx.createRadialGradient(width / 2, height * 0.3, 0, width / 2, height * 0.3, width * 0.8)
-  radialGlow.addColorStop(0, 'rgba(255, 255, 255, 0.03)')
-  radialGlow.addColorStop(1, 'rgba(0, 0, 0, 0.2)')
+  // Soft radial overlay for depth - positioned higher
+  const radialGlow = ctx.createRadialGradient(width / 2, height * 0.25, 0, width / 2, height * 0.25, width * 0.9)
+  radialGlow.addColorStop(0, 'rgba(255, 255, 255, 0.04)')
+  radialGlow.addColorStop(1, 'rgba(0, 0, 0, 0.25)')
   ctx.fillStyle = radialGlow
   ctx.fillRect(0, 0, width, height)
 
@@ -155,45 +155,52 @@ export async function generateFlightShareImage(
     }
   }
 
-  // Main content area - optimized for mobile readability
-  const contentY = hasAircraftImage ? 520 : 180
-  const cardPadding = 50
+  // Clean modern design with proper spacing
+  let currentY = hasAircraftImage ? 550 : 100
 
-  // Flight callsign/registration - Large, bold, highly readable
+  // Flight callsign/registration - Large, clean title
   const mainTitle = flight.callsign || flight.registration || flight.hex
-
   ctx.fillStyle = '#ffffff'
-  ctx.font = '700 80px -apple-system, SF Pro Display, system-ui, sans-serif'
-  ctx.textAlign = 'left'
-  ctx.fillText(mainTitle, cardPadding, contentY)
+  ctx.font = '800 120px -apple-system, SF Pro Display, system-ui, sans-serif'
+  ctx.textAlign = 'center'
+  ctx.fillText(mainTitle, width / 2, currentY)
 
-  // Type subtitle - larger for readability
-  let subtitleY = contentY + 55
+  currentY += 85
+
+  // Aircraft type - clean subtitle
   if (flight.type && flight.type !== "Unknown") {
     ctx.fillStyle = 'rgba(255, 255, 255, 0.7)'
-    ctx.font = '500 28px -apple-system, SF Pro Display, system-ui, sans-serif'
-    ctx.fillText(flight.type, cardPadding, subtitleY)
-    subtitleY += 50
+    ctx.font = '500 40px -apple-system, system-ui, sans-serif'
+    ctx.textAlign = 'center'
+    ctx.fillText(flight.type, width / 2, currentY)
+    currentY += 70
+  } else {
+    currentY += 40
   }
 
-  // Emergency badge if applicable
+  // Emergency badge if applicable - centered
   if (flight.status === "Emergency") {
+    const badgeWidth = 280
+    const badgeHeight = 60
+    const badgeX = (width - badgeWidth) / 2
+
     ctx.fillStyle = '#ef4444'
-    roundRect(ctx, cardPadding, subtitleY, 180, 42, 21, true, false)
+    roundRect(ctx, badgeX, currentY - 50, badgeWidth, badgeHeight, 30, true, false)
 
     ctx.fillStyle = '#ffffff'
-    ctx.font = '700 18px -apple-system, system-ui, sans-serif'
-    ctx.textAlign = 'left'
-    ctx.fillText('EMERGENCY', cardPadding + 22, subtitleY + 27)
-    subtitleY += 62
+    ctx.font = '700 28px -apple-system, system-ui, sans-serif'
+    ctx.textAlign = 'center'
+    ctx.fillText('⚠ EMERGENCY', width / 2, currentY - 14)
+    currentY += 40
   }
 
-  // Stats grid - larger cards for mobile readability
-  const statsY = subtitleY + 15
-  const statBoxWidth = 320
-  const statBoxHeight = 140
-  const statSpacing = 20
-  const statsStartX = cardPadding
+  // Stats - clean 3-column grid
+  const statsY = currentY
+  const statBoxWidth = 340
+  const statBoxHeight = 180
+  const statSpacing = 30
+  const totalStatsWidth = (statBoxWidth * 3) + (statSpacing * 2)
+  const statsStartX = (width - totalStatsWidth) / 2
 
   // Altitude card
   drawAppleStatCard(
@@ -234,33 +241,46 @@ export async function generateFlightShareImage(
     colors.accent
   )
 
-  // Info section - larger text for mobile
-  const infoY = statsY + statBoxHeight + 35
+  currentY = statsY + statBoxHeight + 60
 
-  let currentY = infoY
+  // Info section - clean centered list with separator lines
+  const infoBoxWidth = 1000
+  const infoBoxX = (width - infoBoxWidth) / 2
 
-  const drawInfoRow = (label: string, value: string) => {
-    // Label
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.6)'
-    ctx.font = '500 22px -apple-system, system-ui, sans-serif'
+  const drawInfoRow = (label: string, value: string, isLast: boolean = false) => {
+    // Label on left
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.5)'
+    ctx.font = '500 36px -apple-system, system-ui, sans-serif'
     ctx.textAlign = 'left'
-    ctx.fillText(label, cardPadding, currentY)
+    ctx.fillText(label, infoBoxX, currentY)
 
-    // Value
+    // Value on right
     ctx.fillStyle = '#ffffff'
-    ctx.font = '600 22px -apple-system, system-ui, sans-serif'
+    ctx.font = '600 36px -apple-system, system-ui, sans-serif'
     ctx.textAlign = 'right'
-    ctx.fillText(value, width - cardPadding, currentY)
+    ctx.fillText(value, infoBoxX + infoBoxWidth, currentY)
 
-    currentY += 42
+    currentY += 65
+
+    // Separator line
+    if (!isLast) {
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)'
+      ctx.lineWidth = 2
+      ctx.beginPath()
+      ctx.moveTo(infoBoxX, currentY - 32)
+      ctx.lineTo(infoBoxX + infoBoxWidth, currentY - 32)
+      ctx.stroke()
+    }
   }
 
-  drawInfoRow('ICAO', flight.hex.toUpperCase())
+  // Collect all info rows to determine which is last
+  const infoRows: Array<{ label: string; value: string }> = []
+  infoRows.push({ label: 'ICAO', value: flight.hex.toUpperCase() })
   if (flight.registration) {
-    drawInfoRow('Registration', flight.registration)
+    infoRows.push({ label: 'Registration', value: flight.registration })
   }
   if (flight.squawk && flight.squawk !== "N/A") {
-    drawInfoRow('Squawk', flight.squawk)
+    infoRows.push({ label: 'Squawk', value: flight.squawk })
   }
 
   // Query Derad Network for proof of track
@@ -331,39 +351,55 @@ export async function generateFlightShareImage(
   // Add proof of track if found
   if (proofOfTrackId) {
     console.log('Adding proof of track to image:', proofOfTrackId)
-    drawInfoRow('Proof of track', proofOfTrackId.substring(0, 20) + '...')
+    infoRows.push({ label: 'Proof of Track', value: proofOfTrackId.substring(0, 20) + '...' })
   } else {
     console.log('No proof of track ID to display')
   }
 
-  // Footer - branding and timestamp
-  const footerY = height - 110
+  // Draw all info rows
+  infoRows.forEach((row, index) => {
+    drawInfoRow(row.label, row.value, index === infoRows.length - 1)
+  })
+
+  currentY += 20
+
+  // Timestamp below info rows
   const currentTime = new Date()
   const timeString = currentTime.toLocaleString('en-US', {
     month: 'short',
     day: 'numeric',
+    year: 'numeric',
     hour: '2-digit',
     minute: '2-digit'
   })
-
-  // Timestamp on left
   ctx.fillStyle = 'rgba(255, 255, 255, 0.4)'
-  ctx.font = '500 18px -apple-system, system-ui, sans-serif'
-  ctx.textAlign = 'left'
-  ctx.fillText(timeString, cardPadding, footerY)
+  ctx.font = '400 28px -apple-system, system-ui, sans-serif'
+  ctx.textAlign = 'center'
+  ctx.fillText(timeString, width / 2, currentY)
 
-  // Logo on right
-  ctx.fillStyle = 'rgba(255, 255, 255, 0.5)'
-  ctx.font = '600 22px -apple-system, system-ui, sans-serif'
-  ctx.textAlign = 'right'
-  ctx.fillText('DeRadar', width - cardPadding, footerY)
+  currentY += 60
+
+  // Footer - clean branding
+  const footerY = currentY
+
+  // DeRadar branding centered
+  ctx.fillStyle = '#ffffff'
+  ctx.font = '700 52px -apple-system, SF Pro Display, system-ui, sans-serif'
+  ctx.textAlign = 'center'
+  ctx.fillText('DeRadar', width / 2, footerY + 60)
+
+  // Tagline
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.6)'
+  ctx.font = '400 28px -apple-system, system-ui, sans-serif'
+  ctx.textAlign = 'center'
+  ctx.fillText('Decentralized Aircraft Tracking', width / 2, footerY + 98)
 
   // Powered by section with logos
-  const poweredByY = footerY + 45
+  const poweredByY = footerY + 138
 
   // "Powered by" text
   ctx.fillStyle = 'rgba(255, 255, 255, 0.4)'
-  ctx.font = '400 16px -apple-system, system-ui, sans-serif'
+  ctx.font = '400 24px -apple-system, system-ui, sans-serif'
   ctx.textAlign = 'center'
   ctx.fillText('Powered by', width / 2, poweredByY)
 
@@ -387,11 +423,11 @@ export async function generateFlightShareImage(
 
     await Promise.all([deradLogoPromise, arIoLogoPromise])
 
-    // Draw logos centered below "Powered by" text
-    const logoY = poweredByY + 15
-    const deradLogoHeight = 50 // Derad logo 50px
-    const arIoLogoHeight = 32
-    const logoSpacing = 30
+    // Draw logos centered below "Powered by" text (larger for readability)
+    const logoY = poweredByY + 18
+    const deradLogoHeight = 56 // Derad logo larger
+    const arIoLogoHeight = 36
+    const logoSpacing = 36
 
     // Calculate Derad logo dimensions (maintain aspect ratio)
     const deradScale = deradLogoHeight / deradLogo.height
@@ -471,22 +507,24 @@ function drawAppleStatCard(
   ctx.lineWidth = 1.5
   roundRect(ctx, x, y, width, height, 22, false, true)
 
-  // Label - larger for mobile readability
+  // Label - extra large for mobile readability, centered
   ctx.fillStyle = 'rgba(255, 255, 255, 0.6)'
-  ctx.font = '500 20px -apple-system, system-ui, sans-serif'
-  ctx.textAlign = 'left'
-  ctx.fillText(label, x + 24, y + 40)
+  ctx.font = '500 28px -apple-system, system-ui, sans-serif'
+  ctx.textAlign = 'center'
+  ctx.fillText(label, x + width / 2, y + 50)
 
-  // Value - extra large, bold, highly readable
+  // Value - extra large, bold, highly readable, centered
   ctx.fillStyle = '#ffffff'
-  ctx.font = '700 48px -apple-system, system-ui, sans-serif'
-  ctx.fillText(value, x + 24, y + 90)
+  ctx.font = '700 60px -apple-system, system-ui, sans-serif'
+  ctx.textAlign = 'center'
+  ctx.fillText(value, x + width / 2, y + 110)
 
-  // Unit - larger, accent colored
+  // Unit - larger, accent colored, centered
   if (unit) {
     ctx.fillStyle = accentColor
-    ctx.font = '600 20px -apple-system, system-ui, sans-serif'
-    ctx.fillText(unit, x + 24, y + 115)
+    ctx.font = '600 28px -apple-system, system-ui, sans-serif'
+    ctx.textAlign = 'center'
+    ctx.fillText(unit, x + width / 2, y + 144)
   }
 
   ctx.restore()

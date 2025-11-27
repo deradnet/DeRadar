@@ -9,13 +9,26 @@ const config: CapacitorConfig = {
     iosScheme: 'https',
     // Enable hardware acceleration
     allowNavigation: ['*'],
-    cleartext: true
+    cleartext: true,
+    // Performance: Load files from local filesystem (much faster than server)
+    hostname: 'localhost',
   },
   android: {
     // Enable Android-specific optimizations
     allowMixedContent: true,
     captureInput: true,
-    webContentsDebuggingEnabled: false
+    webContentsDebuggingEnabled: false,
+    // WebView performance optimizations
+    backgroundColor: '#0f172a',
+    // Enable hardware acceleration for smooth rendering
+    loggingBehavior: 'none',
+  },
+  ios: {
+    // iOS WebView optimizations
+    contentInset: 'never',
+    scrollEnabled: true,
+    // Enable WKWebView optimizations
+    limitsNavigationsToAppBoundDomains: false,
   },
   plugins: {
     SplashScreen: {

@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState } from "react"
 import type { Aircraft } from "@/types/aircraft"
 import { createAircraftIcon } from "@/lib/aircraft-icons"
+import L from "leaflet"
+import "leaflet/dist/leaflet.css"
 
 interface AircraftMapProps {
   aircraft: Aircraft[]
@@ -19,6 +21,7 @@ export function AircraftMapLeaflet({ aircraft, onFlightSelect, highlightedHex, o
   const [selectedHex, setSelectedHex] = useState<string | null>(null)
   const mountedRef = useRef(true)
   const highlightCircleRef = useRef<any>(null)
+  const updateMarkersRef = useRef<(() => void) | null>(null)
 
   // Initialize map
   useEffect(() => {
@@ -28,20 +31,7 @@ export function AircraftMapLeaflet({ aircraft, onFlightSelect, highlightedHex, o
       if (!containerRef.current) return
 
       try {
-        // Wait for Leaflet to be available
-        let attempts = 0
-        while (typeof (window as any).L === 'undefined' && attempts < 50) {
-          await new Promise(resolve => setTimeout(resolve, 100))
-          attempts++
-        }
-
-        if (typeof (window as any).L === 'undefined') {
-          throw new Error('Leaflet failed to load')
-        }
-
         if (!mountedRef.current) return
-
-        const L = (window as any).L
 
         // Initialize Leaflet map centered on Europe
         const map = L.map('aircraft-map-container', {
@@ -80,76 +70,79 @@ export function AircraftMapLeaflet({ aircraft, onFlightSelect, highlightedHex, o
     }
   }, [])
 
-  // Update aircraft markers
+  // Update aircraft markers with batching
   useEffect(() => {
     if (!mapRef.current || !mountedRef.current || aircraft.length === 0) return
 
-    const L = (window as any).L
-    if (!L) return
+    const performUpdate = () => {
+      if (!mapRef.current || !mountedRef.current) return
 
-    try {
-      const bounds = mapRef.current.getBounds()
+      try {
+        // Always get fresh bounds for accurate filtering
+        const bounds = mapRef.current.getBounds()
 
-      // Filter visible aircraft
-      const visibleAircraft = aircraft.filter((a: Aircraft) =>
-        a.lat !== undefined &&
-        a.lon !== undefined &&
-        a.lat !== null &&
-        a.lon !== null &&
-        !isNaN(a.lat) &&
-        !isNaN(a.lon) &&
-        bounds.contains([a.lat, a.lon])
-      )
+        // Filter visible aircraft
+        const visibleAircraft = aircraft.filter((a: Aircraft) =>
+          a.lat !== undefined &&
+          a.lon !== undefined &&
+          a.lat !== null &&
+          a.lon !== null &&
+          !isNaN(a.lat) &&
+          !isNaN(a.lon) &&
+          bounds.contains([a.lat, a.lon])
+        )
 
-      const currentHexes = new Set(visibleAircraft.map((a: Aircraft) => a.hex))
+        const currentHexes = new Set(visibleAircraft.map((a: Aircraft) => a.hex))
 
-      // Update/create markers
-      for (const ac of visibleAircraft) {
-        if (!mountedRef.current) break
+        // Batch operations for requestAnimationFrame
+        const positionUpdates: Array<{ marker: any; lat: number; lon: number }> = []
+        const iconUpdates: Array<{ marker: any; icon: any; isSelected: boolean }> = []
+        const newMarkers: Array<{ ac: Aircraft; hex: string; isSelected: boolean }> = []
 
-        const hex = ac.hex
-        const isSelected = hex === selectedHex
+        // Collect updates
+        for (const ac of visibleAircraft) {
+          if (!mountedRef.current) break
 
-        let marker = markersRef.current.get(hex)
+          const hex = ac.hex
+          const isSelected = hex === selectedHex
 
-        if (!marker) {
-          // Create SVG icon
-          const svgString = createAircraftIcon(ac, isSelected)
-          const icon = L.divIcon({
-            html: svgString,
-            className: 'aircraft-marker',
-            iconSize: [24, 24],
-            iconAnchor: [12, 12],
-          })
+          let marker = markersRef.current.get(hex)
 
-          // Create marker
-          marker = L.marker([ac.lat, ac.lon], { icon })
-            .addTo(mapRef.current)
-            .on('click', () => {
-              if (!mountedRef.current) return
-              setSelectedHex(hex)
-              onFlightSelect(ac)
+          if (!marker) {
+            // Queue new marker creation
+            newMarkers.push({ ac, hex, isSelected })
+          } else {
+            // Queue position update (lat/lon already validated by filter)
+            positionUpdates.push({ marker, lat: ac.lat!, lon: ac.lon! })
 
-              // Haptic feedback
-              if ((window as any).Capacitor?.Plugins?.Haptics) {
-                (window as any).Capacitor.Plugins.Haptics.impact({ style: 'light' })
-              }
-            })
+            // Check if icon needs update
+            const needsUpdate =
+              marker.isSelected !== isSelected ||
+              marker.aircraftData?.emergency !== ac.emergency ||
+              marker.aircraftData?.alt_baro !== ac.alt_baro ||
+              marker.aircraftData?.gs !== ac.gs
 
-          marker.aircraftData = ac
-          markersRef.current.set(hex, marker)
-        } else {
-          // Update existing marker
-          marker.setLatLng([ac.lat, ac.lon])
+            if (needsUpdate) {
+              const svgString = createAircraftIcon(ac, isSelected)
+              const icon = L.divIcon({
+                html: svgString,
+                className: 'aircraft-marker',
+                iconSize: [24, 24],
+                iconAnchor: [12, 12],
+              })
+              iconUpdates.push({ marker, icon, isSelected })
+            }
 
-          // Update icon if selection changed or aircraft properties changed
-          const needsUpdate =
-            marker.isSelected !== isSelected ||
-            marker.aircraftData?.emergency !== ac.emergency ||
-            marker.aircraftData?.alt_baro !== ac.alt_baro ||
-            marker.aircraftData?.gs !== ac.gs
+            marker.aircraftData = ac
+          }
+        }
 
-          if (needsUpdate) {
+        // Apply updates in batches using requestAnimationFrame
+        requestAnimationFrame(() => {
+          if (!mountedRef.current) return
+
+          // Create new markers
+          for (const { ac, hex, isSelected } of newMarkers) {
             const svgString = createAircraftIcon(ac, isSelected)
             const icon = L.divIcon({
               html: svgString,
@@ -157,25 +150,78 @@ export function AircraftMapLeaflet({ aircraft, onFlightSelect, highlightedHex, o
               iconSize: [24, 24],
               iconAnchor: [12, 12],
             })
+
+            const marker = L.marker([ac.lat!, ac.lon!], { icon })
+              .addTo(mapRef.current)
+              .on('click', () => {
+                if (!mountedRef.current) return
+                setSelectedHex(hex)
+                onFlightSelect(ac)
+
+                // Haptic feedback
+                if ((window as any).Capacitor?.Plugins?.Haptics) {
+                  (window as any).Capacitor.Plugins.Haptics.impact({ style: 'light' })
+                }
+              });
+
+            (marker as any).aircraftData = ac;
+            (marker as any).isSelected = isSelected
+            markersRef.current.set(hex, marker)
+          }
+
+          // Update positions (fast path)
+          for (const { marker, lat, lon } of positionUpdates) {
+            marker.setLatLng([lat, lon])
+          }
+
+          // Update icons (slower path)
+          for (const { marker, icon, isSelected } of iconUpdates) {
             marker.setIcon(icon)
             marker.isSelected = isSelected
           }
 
-          marker.aircraftData = ac
-        }
+          // Remove markers for aircraft no longer visible
+          markersRef.current.forEach((marker, hex) => {
+            if (!currentHexes.has(hex)) {
+              marker.remove()
+              markersRef.current.delete(hex)
+            }
+          })
+        })
+      } catch (error) {
+        console.error('Error updating aircraft on map:', error)
       }
-
-      // Remove markers for aircraft no longer visible
-      markersRef.current.forEach((marker, hex) => {
-        if (!currentHexes.has(hex)) {
-          marker.remove()
-          markersRef.current.delete(hex)
-        }
-      })
-    } catch (error) {
-      console.error('Error updating aircraft on map:', error)
     }
+
+    // Store update function in ref so map events can call it
+    updateMarkersRef.current = performUpdate
+
+    // Perform update immediately - batching via requestAnimationFrame provides efficiency
+    performUpdate()
   }, [aircraft, selectedHex, onFlightSelect])
+
+  // Trigger marker updates when map viewport changes (pan/zoom)
+  useEffect(() => {
+    if (!mapRef.current) return
+
+    const handleMapMove = () => {
+      // Call the latest update function when map moves
+      if (updateMarkersRef.current) {
+        updateMarkersRef.current()
+      }
+    }
+
+    // Update on map movement to show/hide aircraft as viewport changes
+    mapRef.current.on('moveend', handleMapMove)
+    mapRef.current.on('zoomend', handleMapMove)
+
+    return () => {
+      if (mapRef.current) {
+        mapRef.current.off('moveend', handleMapMove)
+        mapRef.current.off('zoomend', handleMapMove)
+      }
+    }
+  }, [])
 
   // Handle highlighted aircraft (zoom out, zoom in, highlight with pulsing circle)
   useEffect(() => {
@@ -183,9 +229,6 @@ export function AircraftMapLeaflet({ aircraft, onFlightSelect, highlightedHex, o
 
     const highlightedAircraft = aircraft.find(a => a.hex === highlightedHex)
     if (!highlightedAircraft || !highlightedAircraft.lat || !highlightedAircraft.lon) return
-
-    const L = (window as any).L
-    if (!L) return
 
     // Wait a bit for markers to be created
     const timeout = setTimeout(() => {
@@ -221,7 +264,7 @@ export function AircraftMapLeaflet({ aircraft, onFlightSelect, highlightedHex, o
           }
 
           // Create pulsing circle around the aircraft
-          const circle = L.circle([targetLat, targetLon], {
+          const circle = L.circle([targetLat!, targetLon!], {
             color: '#10b981',
             fillColor: '#10b981',
             fillOpacity: 0.15,

@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system" />
+            <certificates src="user" />
+        </trust-anchors>
+    </base-config>
+
+    <!-- Specific domain configurations for better performance -->
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="true">localhost</domain>
+        <domain includeSubdomains="true">derad.network</domain>
+        <domain includeSubdomains="true">derad.org</domain>
+        <domain includeSubdomains="true">deradar.app</domain>
+        <domain includeSubdomains="true">basemaps.cartocdn.com</domain>
+        <domain includeSubdomains="true">airhex.com</domain>
+        <domain includeSubdomains="true">planespotters.net</domain>
+    </domain-config>
+</network-security-config>

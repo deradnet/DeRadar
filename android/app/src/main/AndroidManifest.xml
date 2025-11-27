@@ -10,7 +10,10 @@
         android:hardwareAccelerated="true"
         android:largeHeap="true"
         android:theme="@style/AppTheme"
-        android:usesCleartextTraffic="true">
+        android:usesCleartextTraffic="true"
+        android:extractNativeLibs="false"
+        android:fullBackupContent="@xml/backup_rules"
+        android:networkSecurityConfig="@xml/network_security_config">
 
         <!-- Firebase Performance Monitoring debug logging -->
         <meta-data
@@ -49,6 +52,9 @@
     <!-- Permissions -->
 
     <uses-permission android:name="android.permission.INTERNET" />
+
+    <!-- Push Notifications (Android 13+) -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <!-- Remove AD_ID permission - we don't use advertising -->
     <uses-permission android:name="com.google.android.gms.permission.AD_ID" tools:node="remove"/>

@@ -125,7 +125,7 @@ export function PixelWave({ progress, isActive, height = 60 }: PixelWaveProps) {
   const pixelsRef = useRef<Pixel[]>([])
   const tickerRef = useRef(0)
   const animationDirectionRef = useRef(1)
-  const rafRef = useRef<number>()
+  const rafRef = useRef<number | undefined>(undefined)
   const lastTimeRef = useRef(0)
 
   const rand = (min: number, max: number) => {

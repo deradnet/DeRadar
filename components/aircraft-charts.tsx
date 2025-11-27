@@ -24,6 +24,7 @@ export default function AircraftCharts({ aircraft, isNativeApp = false, isMobile
   const [nextUpdateIn, setNextUpdateIn] = useState<number>(10)
   const [treemapLoaded, setTreemapLoaded] = useState(false)
   const [activeChartIndex, setActiveChartIndex] = useState(0)
+  const activeChartIndexRef = useRef(0) // Track current index in ref to avoid stale closure
   const scrollContainerRef = useRef<HTMLDivElement>(null)
 
   // Chart refs for direct updates without re-rendering
@@ -134,6 +135,7 @@ export default function AircraftCharts({ aircraft, isNativeApp = false, isMobile
     }
 
     // Update active index immediately for instant UI feedback
+    activeChartIndexRef.current = index
     setActiveChartIndex(index)
     onActiveChartChange?.(index)
 
@@ -144,37 +146,55 @@ export default function AircraftCharts({ aircraft, isNativeApp = false, isMobile
     })
   }
 
-  // Backup scroll listener to detect active chart manually
+  // Scroll listener to detect active chart - runs immediately for instant feedback
   useEffect(() => {
     if (!isNativeApp || !isMobile) return
     if (!scrollContainerRef.current) return
 
     const scrollContainer = scrollContainerRef.current
     let scrollTimeout: NodeJS.Timeout
+    let rafId: number
 
-    const handleScroll = () => {
-      clearTimeout(scrollTimeout)
-      scrollTimeout = setTimeout(() => {
-        if (!scrollContainer) return
+    const updateIndex = () => {
+      if (!scrollContainer) return
 
-        const scrollTop = scrollContainer.scrollTop
-        const windowHeight = window.innerHeight
-        const currentIndex = Math.round(scrollTop / windowHeight)
+      const scrollTop = scrollContainer.scrollTop
+      const windowHeight = window.innerHeight
+      const currentIndex = Math.round(scrollTop / windowHeight)
 
-        if (currentIndex !== activeChartIndex && currentIndex >= 0 && currentIndex < chartNavItems.length) {
+      // Always update to ensure it stays in sync
+      if (currentIndex >= 0 && currentIndex < chartNavItems.length) {
+        if (currentIndex !== activeChartIndexRef.current) {
+          activeChartIndexRef.current = currentIndex
           setActiveChartIndex(currentIndex)
           onActiveChartChange?.(currentIndex)
         }
-      }, 150)
+      }
+    }
+
+    const handleScroll = () => {
+      // Cancel any pending animation frame
+      if (rafId) cancelAnimationFrame(rafId)
+
+      // Update on next animation frame for smooth performance
+      rafId = requestAnimationFrame(updateIndex)
+
+      // Also update after scroll stops (debounced for snap scroll)
+      clearTimeout(scrollTimeout)
+      scrollTimeout = setTimeout(updateIndex, 150)
     }
 
     scrollContainer.addEventListener('scroll', handleScroll, { passive: true })
 
+    // Initial update
+    updateIndex()
+
     return () => {
       clearTimeout(scrollTimeout)
+      if (rafId) cancelAnimationFrame(rafId)
       scrollContainer.removeEventListener('scroll', handleScroll)
     }
-  }, [isNativeApp, isMobile, activeChartIndex, chartNavItems.length, onActiveChartChange])
+  }, [isNativeApp, isMobile, chartNavItems.length, onActiveChartChange])
 
   // Countdown timer for next update
   useEffect(() => {

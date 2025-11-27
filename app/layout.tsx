@@ -2,11 +2,18 @@ import type React from "react";
 import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
+import "leaflet/dist/leaflet.css";
 
 import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/ui/toaster";
+import { PushNotificationInit } from "@/components/push-notification-init";
 
-const inter = Inter({ subsets: ["latin"] });
+const inter = Inter({
+  subsets: ["latin"],
+  display: 'swap',
+  preload: true,
+  adjustFontFallback: true,
+});
 
 export const metadata: Metadata = {
   title: "DeRadar - Decentralized Aircraft Tracking",
@@ -47,19 +54,24 @@ export default function RootLayout({
         <link rel="shortcut icon" href="/icon-32.png" type="image/png" />
         <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
         <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-        {/* Leaflet CSS for map functionality */}
-        <link
-          rel="stylesheet"
-          href="https://unpkg.com/leaflet@latest/dist/leaflet.css"
-          integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
-          crossOrigin=""
-        />
-        {/* Leaflet JS */}
-        <script
-          src="https://unpkg.com/leaflet@latest/dist/leaflet.js"
-          integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
-          crossOrigin=""
-        ></script>
+
+        {/* DNS Prefetch & Preconnect for external resources */}
+        <link rel="dns-prefetch" href="https://derad.network" />
+        <link rel="dns-prefetch" href="https://svg-api.deradar.app" />
+        <link rel="dns-prefetch" href="https://content.airhex.com" />
+        <link rel="dns-prefetch" href="https://antenna-1.derad.org" />
+        <link rel="dns-prefetch" href="https://airline-logo-api.derad.org" />
+        <link rel="dns-prefetch" href="https://api.planespotters.net" />
+
+        <link rel="preconnect" href="https://derad.network" crossOrigin="anonymous" />
+        <link rel="preconnect" href="https://svg-api.deradar.app" crossOrigin="anonymous" />
+        <link rel="preconnect" href="https://content.airhex.com" crossOrigin="anonymous" />
+
+        {/* Map tile providers */}
+        <link rel="dns-prefetch" href="https://a.basemaps.cartocdn.com" />
+        <link rel="dns-prefetch" href="https://b.basemaps.cartocdn.com" />
+        <link rel="dns-prefetch" href="https://c.basemaps.cartocdn.com" />
+
         <script
           defer
           data-domain="deradar.derad.network"
@@ -73,6 +85,7 @@ export default function RootLayout({
           enableSystem={false}
           disableTransitionOnChange
         >
+          <PushNotificationInit />
           {children}
           <Toaster />
         </ThemeProvider>
