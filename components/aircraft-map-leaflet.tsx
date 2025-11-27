@@ -155,12 +155,19 @@ export function AircraftMapLeaflet({ aircraft, onFlightSelect, highlightedHex, o
               .addTo(mapRef.current)
               .on('click', () => {
                 if (!mountedRef.current) return
-                setSelectedHex(hex)
-                onFlightSelect(ac)
 
-                // Haptic feedback
-                if ((window as any).Capacitor?.Plugins?.Haptics) {
-                  (window as any).Capacitor.Plugins.Haptics.impact({ style: 'light' })
+                try {
+                  setSelectedHex(hex)
+                  onFlightSelect(ac)
+
+                  // Haptic feedback
+                  if ((window as any).Capacitor?.Plugins?.Haptics) {
+                    (window as any).Capacitor.Plugins.Haptics.impact({ style: 'light' }).catch(() => {
+                      // Silently fail if haptics not available
+                    })
+                  }
+                } catch (error) {
+                  console.error('Error handling aircraft click:', error)
                 }
               });
 

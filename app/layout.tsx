@@ -39,7 +39,10 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
+  maximumScale: 1, // Prevent zoom issues on fold devices
+  userScalable: false, // Disable pinch zoom for better fold experience
   themeColor: "#0f172a",
+  viewportFit: "cover", // Ensure content fits fold screens properly
 };
 
 export default function RootLayout({
@@ -53,7 +56,7 @@ export default function RootLayout({
         <link rel="icon" href="/icon-32.png" type="image/png" />
         <link rel="shortcut icon" href="/icon-32.png" type="image/png" />
         <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
-        <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+        <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
 
         {/* DNS Prefetch & Preconnect for external resources */}
         <link rel="dns-prefetch" href="https://derad.network" />

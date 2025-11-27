@@ -29,6 +29,33 @@ export function AircraftInfoPanel({ selectedFlight, onClose, onShowOnMap }: Airc
   const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null)
   const [selectedPalette, setSelectedPalette] = useState<ColorPalette | undefined>(undefined)
   const [isRegenerating, setIsRegenerating] = useState(false)
+  const [hasError, setHasError] = useState(false)
+
+  // Error boundary effect
+  useEffect(() => {
+    const handleError = (error: ErrorEvent) => {
+      console.error('Panel error:', error)
+      setHasError(true)
+    }
+    window.addEventListener('error', handleError)
+    return () => window.removeEventListener('error', handleError)
+  }, [])
+
+  if (hasError) {
+    return (
+      <div className="fixed inset-0 bg-black/80 z-[10000] flex items-center justify-center">
+        <div className="bg-slate-800 p-6 rounded-xl text-white text-center">
+          <p className="mb-4">An error occurred loading the aircraft panel</p>
+          <button
+            onClick={onClose}
+            className="px-4 py-2 bg-blue-500 rounded-lg"
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    )
+  }
 
   useEffect(() => {
     // Reset images when aircraft changes
@@ -181,8 +208,20 @@ export function AircraftInfoPanel({ selectedFlight, onClose, onShowOnMap }: Airc
         initial={{ y: "100%" }}
         animate={{ y: 0 }}
         exit={{ y: "100%" }}
-        transition={{ type: "spring", damping: 30, stiffness: 300 }}
-        className="fixed bottom-0 left-0 right-0 z-[10000] bg-slate-900 rounded-t-3xl shadow-2xl max-h-[85vh] overflow-hidden"
+        transition={{
+          type: "spring",
+          damping: 35,
+          stiffness: 280,
+          mass: 0.8,
+          // Gentler animation for better performance on foldables
+          bounce: 0.2
+        }}
+        className="fixed bottom-0 left-0 right-0 z-[10000] bg-slate-900 rounded-t-3xl shadow-2xl max-h-[85vh] fold-narrow:max-h-[90vh] fold-wide:max-h-[75vh] overflow-hidden"
+        style={{
+          // Hardware acceleration for smoother animations
+          transform: 'translateZ(0)',
+          willChange: 'transform',
+        }}
       >
         {/* Drag Handle */}
         <div className="flex justify-center pt-3 pb-2">
@@ -193,14 +232,14 @@ export function AircraftInfoPanel({ selectedFlight, onClose, onShowOnMap }: Airc
         <div className="absolute top-5 right-4 z-10">
           <button
             onClick={onClose}
-            className="p-2.5 bg-slate-800/80 hover:bg-slate-700 active:bg-slate-600 rounded-full transition-all active:scale-95 shadow-lg"
+            className="p-2.5 bg-slate-800/80 hover:bg-slate-700 active:bg-slate-600 rounded-full transition-all active:scale-95 shadow-lg fold-narrow:p-3 fold-narrow:top-6 fold-narrow:right-6"
           >
-            <X className="w-5 h-5 text-white" />
+            <X className="w-5 h-5 text-white fold-narrow:w-6 fold-narrow:h-6" />
           </button>
         </div>
 
         {/* Content */}
-        <div className="overflow-y-auto max-h-[calc(85vh-3rem)] pb-6">
+        <div className="overflow-y-auto max-h-[calc(85vh-3rem)] fold-narrow:max-h-[calc(90vh-3rem)] fold-wide:max-h-[calc(75vh-3rem)] pb-6">
           {/* Aircraft Image */}
           {aircraftImage && photoMetadata && (
             <div className="px-2 pt-2">
@@ -313,33 +352,33 @@ export function AircraftInfoPanel({ selectedFlight, onClose, onShowOnMap }: Airc
 
           {/* Quick Stats Grid */}
           <div className="px-4 mb-3">
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-3 gap-2 fold-narrow:gap-3 fold-wide:gap-4">
               {/* Altitude */}
-              <div className="text-center p-3 bg-blue-500/10 rounded-xl border border-blue-500/20">
-                <ArrowUp className="w-4 h-4 text-blue-400 mx-auto mb-1" />
-                <div className="text-lg font-bold text-white">
+              <div className="text-center p-3 fold-narrow:p-4 fold-wide:p-5 bg-blue-500/10 rounded-xl border border-blue-500/20">
+                <ArrowUp className="w-4 h-4 fold-narrow:w-5 fold-narrow:h-5 fold-wide:w-6 fold-wide:h-6 text-blue-400 mx-auto mb-1" />
+                <div className="text-lg fold-narrow:text-xl fold-wide:text-2xl font-bold text-white">
                   {selectedFlight.altitude > 0 ? Math.round(selectedFlight.altitude / 100) : 'GND'}
                 </div>
-                <div className="text-[10px] text-slate-400 uppercase">
+                <div className="text-[10px] fold-narrow:text-xs fold-wide:text-sm text-slate-400 uppercase">
                   {selectedFlight.altitude > 0 ? 'FL' : 'Ground'}
                 </div>
               </div>
 
               {/* Speed */}
-              <div className="text-center p-3 bg-orange-500/10 rounded-xl border border-orange-500/20">
-                <Gauge className="w-4 h-4 text-orange-400 mx-auto mb-1" />
-                <div className="text-lg font-bold text-white">{selectedFlight.speed}</div>
-                <div className="text-[10px] text-slate-400 uppercase">kts</div>
+              <div className="text-center p-3 fold-narrow:p-4 fold-wide:p-5 bg-orange-500/10 rounded-xl border border-orange-500/20">
+                <Gauge className="w-4 h-4 fold-narrow:w-5 fold-narrow:h-5 fold-wide:w-6 fold-wide:h-6 text-orange-400 mx-auto mb-1" />
+                <div className="text-lg fold-narrow:text-xl fold-wide:text-2xl font-bold text-white">{selectedFlight.speed}</div>
+                <div className="text-[10px] fold-narrow:text-xs fold-wide:text-sm text-slate-400 uppercase">kts</div>
               </div>
 
               {/* Heading */}
-              <div className="text-center p-3 bg-purple-500/10 rounded-xl border border-purple-500/20">
+              <div className="text-center p-3 fold-narrow:p-4 fold-wide:p-5 bg-purple-500/10 rounded-xl border border-purple-500/20">
                 <Plane
-                  className="w-4 h-4 text-purple-400 mx-auto mb-1"
+                  className="w-4 h-4 fold-narrow:w-5 fold-narrow:h-5 fold-wide:w-6 fold-wide:h-6 text-purple-400 mx-auto mb-1"
                   style={{ transform: `rotate(${selectedFlight.heading}deg)` }}
                 />
-                <div className="text-lg font-bold text-white">{selectedFlight.heading}°</div>
-                <div className="text-[10px] text-slate-400 uppercase">hdg</div>
+                <div className="text-lg fold-narrow:text-xl fold-wide:text-2xl font-bold text-white">{selectedFlight.heading}°</div>
+                <div className="text-[10px] fold-narrow:text-xs fold-wide:text-sm text-slate-400 uppercase">hdg</div>
               </div>
             </div>
           </div>

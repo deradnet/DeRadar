@@ -86,10 +86,40 @@ export default function DeradFlightTracker() {
   // Check if mobile and native app on mount and orientation change
   useEffect(() => {
     const checkPlatform = () => {
-      const mobile = window.innerWidth < 768
-      const nativeApp = isCapacitor()
-      setIsMobile(mobile)
-      setIsNativeApp(nativeApp)
+      try {
+        // Enhanced mobile detection for foldable devices
+        // Google Pixel 9 Pro Fold: unfolded is 2076x2152, folded is 1080x2152
+        // Treat as mobile if:
+        // 1. Width < 768 (traditional mobile breakpoint)
+        // 2. Running on Capacitor (native app) - always treat as mobile for native apps
+        // 3. Touch device with tall aspect ratio (height > width * 1.5)
+        const isCapacitorApp = isCapacitor()
+
+        // For native apps, always use mobile mode regardless of screen size
+        if (isCapacitorApp) {
+          setIsMobile(true)
+          setIsNativeApp(true)
+          return
+        }
+
+        // For web, use traditional detection with foldable support
+        const isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0
+        const width = window.innerWidth
+        const height = window.innerHeight
+        const aspectRatio = height / width
+        const isPortraitTall = aspectRatio > 1.5
+
+        // Consider mobile if width < 768 OR (touch device AND tall portrait)
+        const mobile = width < 768 || (isTouchDevice && isPortraitTall)
+
+        setIsMobile(mobile)
+        setIsNativeApp(false)
+      } catch (error) {
+        console.error('Error in platform detection:', error)
+        // Fallback to safe defaults
+        setIsMobile(window.innerWidth < 768)
+        setIsNativeApp(false)
+      }
     }
 
     checkPlatform()

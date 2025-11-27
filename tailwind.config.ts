@@ -10,6 +10,12 @@ const config: Config = {
   ],
   theme: {
   	extend: {
+  		screens: {
+  			// Custom breakpoints for foldable devices
+  			'fold-narrow': {'min': '600px', 'max': '900px', 'raw': '(orientation: portrait)'},
+  			'fold-wide': {'min': '900px', 'max': '1400px', 'raw': '(min-height: 900px) and (max-aspect-ratio: 1.2/1)'},
+  			// Standard breakpoints remain: sm (640px), md (768px), lg (1024px), xl (1280px), 2xl (1536px)
+  		},
   		colors: {
   			background: 'hsl(var(--background))',
   			foreground: 'hsl(var(--foreground))',
