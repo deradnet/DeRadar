@@ -17,10 +17,11 @@ import type { Aircraft } from "@/types/aircraft"
 import type { FilterCriteria } from "@/types/filter-criteria" // Declare FilterCriteria type
 import { CountryFlag } from "@/components/country-flag"
 import { getAirlineFromCallsign } from "@/lib/airline-lookup"
-import { AircraftInfoPanel } from "./aircraft-info-panel"
+import { FlightCard } from "./flight-card"
 import type { SelectedFlight } from "@/types/aircraft"
 import { useAdaptivePerformance } from "@/hooks/use-adaptive-performance"
 import { useBatterySaver, applyPowerSaveOptimizations, removePowerSaveOptimizations } from "@/hooks/use-battery-saver"
+import { Compass } from "@/components/compass"
 
 interface ActiveFlightsProps {
   aircraft: Aircraft[]
@@ -513,16 +514,12 @@ export function ActiveFlights({
                           </div>
                         </div>
                       </div>
-                      <div className="ml-4">
-                        <div
-                          className={`w-3 h-3 rounded-full ${
-                            isEmergency
-                              ? "bg-red-500 animate-ping"
-                              : flight.gs && flight.gs > 0
-                                ? "bg-green-500"
-                                : "bg-slate-500"
-                          }`}
-                        ></div>
+                      <div className="ml-4 flex items-center">
+                        <Compass
+                          heading={flight.track || 0}
+                          size={40}
+                          animate={false}
+                        />
                       </div>
                     </div>
                   </div>
@@ -562,7 +559,7 @@ export function ActiveFlights({
 
       {/* Aircraft Info Panel */}
       {showAircraftPanel && selectedFlight && (
-        <AircraftInfoPanel
+        <FlightCard
           selectedFlight={selectedFlight}
           onClose={() => setShowAircraftPanel(false)}
         />

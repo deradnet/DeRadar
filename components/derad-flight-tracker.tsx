@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo, useCallback, lazy, Suspense, useRef } from "react"
 import { useAircraftData } from "@/hooks/use-aircraft-data"
-import { AircraftInfoPanel } from "./aircraft-info-panel"
+import { FlightCard } from "./flight-card"
 import { registration_from_hexid } from "@/lib/registration-lookup"
 import { MobileNav } from "./mobile-nav"
 import { SystemAlerts } from "./system-alerts"
@@ -200,8 +200,14 @@ export default function DeradFlightTracker() {
     const tabs: MobileTab[] = ["flights", "miniapps", "home", "map", "charts"]
 
     const handleTouchStart = (e: TouchEvent) => {
-      // Disable swipe gestures when touching the map
       const target = e.target as HTMLElement
+
+      // Disable swipe gestures when aircraft info panel is open
+      if (selectedFlight) {
+        return
+      }
+
+      // Disable swipe gestures when touching the map
       if (target.closest('#aircraft-map-container') ||
           target.closest('.leaflet-container')) {
         return
@@ -212,8 +218,14 @@ export default function DeradFlightTracker() {
     }
 
     const handleTouchEnd = (e: TouchEvent) => {
-      // Disable swipe gestures when touching the map
       const target = e.target as HTMLElement
+
+      // Disable swipe gestures when aircraft info panel is open
+      if (selectedFlight) {
+        return
+      }
+
+      // Disable swipe gestures when touching the map
       if (target.closest('#aircraft-map-container') ||
           target.closest('.leaflet-container')) {
         return
@@ -243,7 +255,7 @@ export default function DeradFlightTracker() {
       document.removeEventListener("touchstart", handleTouchStart)
       document.removeEventListener("touchend", handleTouchEnd)
     }
-  }, [isNativeApp, isMobile, activeMobileTab, swipeStartX, swipeStartY])
+  }, [isNativeApp, isMobile, activeMobileTab, swipeStartX, swipeStartY, selectedFlight])
 
   // Update lastUpdate ref without causing re-render
   useEffect(() => {
@@ -428,6 +440,28 @@ export default function DeradFlightTracker() {
     setSelectedFlight(flightData)
   }, [])
 
+  // Convert all aircraft to SelectedFlight format for swipe navigation
+  const allFlights = useMemo(() => {
+    return aircraft.map((flight: any) => {
+      const registration = flight.r || (flight.hex ? registration_from_hexid(flight.hex) : null)
+      return {
+        id: flight.hex,
+        callsign: flight.flight || flight.hex,
+        aircraft: flight.t || flight.category || "Unknown",
+        altitude: flight.alt_baro || 0,
+        speed: Math.round(flight.gs || 0),
+        heading: Math.round(flight.track || 0),
+        lat: flight.lat || 0,
+        lng: flight.lon || 0,
+        squawk: flight.squawk || "N/A",
+        status: flight.emergency && flight.emergency !== "none" ? "Emergency" : "En Route",
+        registration: registration,
+        hex: flight.hex,
+        type: flight.t || flight.category || "Unknown",
+      } as SelectedFlight
+    })
+  }, [aircraft])
+
   return (
     <>
       {showSplash && <SplashScreen onFinish={() => setShowSplash(false)} />}
@@ -435,7 +469,7 @@ export default function DeradFlightTracker() {
       {!showSplash && (
         <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-white">
           {selectedFlight && (
-            <AircraftInfoPanel
+            <FlightCard
               selectedFlight={selectedFlight}
               onClose={() => setSelectedFlight(null)}
               onShowOnMap={(hex: string) => {
@@ -443,6 +477,9 @@ export default function DeradFlightTracker() {
                 setActiveMobileTab("map")
                 setSelectedFlight(null) // Close the panel
               }}
+              allFlights={allFlights}
+              onNavigate={(flight: SelectedFlight) => setSelectedFlight(flight)}
+              onQueryInSkyQuery={handleQueryInSkyQuery}
             />
           )}
 
