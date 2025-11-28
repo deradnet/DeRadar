@@ -30,4 +30,15 @@ public class MainActivity extends BridgeActivity {
         // Enable JavaScript optimization
         webView.getSettings().setJavaScriptCanOpenWindowsAutomatically(false);
     }
+
+    @Override
+    public void onDestroy() {
+        try {
+            super.onDestroy();
+        } catch (NullPointerException e) {
+            // Workaround for Keyboard plugin WindowInsets crash on destroy
+            // This is a known issue with Capacitor Keyboard plugin v7
+            android.util.Log.w("MainActivity", "Ignoring WindowInsets NPE on destroy", e);
+        }
+    }
 }

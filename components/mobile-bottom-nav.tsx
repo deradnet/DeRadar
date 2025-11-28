@@ -29,6 +29,7 @@ export function MobileBottomNav({ activeTab, onTabChange, isNativeApp = false, s
   const [keyboardHeight, setKeyboardHeight] = useState(0)
   const holdTimerRef = useRef<NodeJS.Timeout | null>(null)
   const isHoldingRef = useRef(false)
+  const searchInputRef = useRef<HTMLInputElement>(null)
 
   // Only show in native app
   if (!isNativeApp) {
@@ -44,6 +45,13 @@ export function MobileBottomNav({ activeTab, onTabChange, isNativeApp = false, s
 
     Keyboard.addListener('keyboardWillShow', (info) => {
       setKeyboardHeight(info.keyboardHeight)
+
+      // Scroll search input into view when keyboard appears
+      setTimeout(() => {
+        if (searchInputRef.current && activeTab === 'flights') {
+          searchInputRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        }
+      }, 100)
     }).then(handle => {
       keyboardWillShowListener = handle
     })
@@ -66,7 +74,7 @@ export function MobileBottomNav({ activeTab, onTabChange, isNativeApp = false, s
         keyboardWillHideListener.remove()
       }
     }
-  }, [isNativeApp])
+  }, [isNativeApp, activeTab])
 
   const tabs = [
     { id: "flights" as MobileTab, icon: Plane, label: "Flights" },
@@ -162,10 +170,17 @@ export function MobileBottomNav({ activeTab, onTabChange, isNativeApp = false, s
               <div className="relative flex-1">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
                 <Input
+                  ref={searchInputRef}
                   type="text"
                   placeholder="Search flights..."
                   value={searchTerm}
                   onChange={(e) => onSearchChange(e.target.value)}
+                  onFocus={() => {
+                    // Scroll into view when focused
+                    setTimeout(() => {
+                      searchInputRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+                    }, 300)
+                  }}
                   className="h-10 pl-10 bg-white/5 border-white/10 text-white placeholder:text-slate-400 backdrop-blur-xl shadow-inner focus:bg-white/10 focus:border-blue-400/30 transition-all"
                 />
               </div>

@@ -162,7 +162,8 @@ export function AircraftInfoPanel({ selectedFlight, onClose, onShowOnMap }: Airc
 
     try {
       console.log('Starting share with flight:', selectedFlight)
-      const success = await shareFlightInfo(selectedFlight)
+      console.log('Using color palette:', selectedPalette)
+      const success = await shareFlightInfo(selectedFlight, selectedPalette)
       console.log('Share result:', success)
       if (success) {
         await haptic.success()

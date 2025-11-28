@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <full-backup-content>
-    <!-- Exclude cache directory from backups for better performance -->
+    <!-- Configure backup rules for the app -->
+    <!-- Note: Cache is automatically excluded from backups -->
     <exclude domain="sharedpref" path="." />
-    <exclude domain="cache" path="." />
     <exclude domain="external" path="." />
 </full-backup-content>

@@ -11,7 +11,6 @@
         android:largeHeap="true"
         android:theme="@style/AppTheme"
         android:usesCleartextTraffic="true"
-        android:extractNativeLibs="false"
         android:fullBackupContent="@xml/backup_rules"
         android:networkSecurityConfig="@xml/network_security_config">
 
@@ -37,6 +36,14 @@
             </intent-filter>
 
         </activity>
+
+        <!-- Google Play Core Dialog Activity (required for in-app review) -->
+        <activity
+            android:name="com.google.android.play.core.common.PlayCoreDialogWrapperActivity"
+            android:exported="false"
+            android:stateNotNeeded="true"
+            android:theme="@style/Theme.PlayCore.Transparent"
+            tools:replace="android:theme" />
 
         <provider
             android:name="androidx.core.content.FileProvider"

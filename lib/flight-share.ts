@@ -560,16 +560,19 @@ function roundRect(
  * Share flight info using native share dialog
  */
 export async function shareFlightInfo(
-  flight: SelectedFlight
+  flight: SelectedFlight,
+  colorPalette?: ColorPalette
 ): Promise<boolean> {
   try {
     console.log('1. Starting shareFlightInfo')
     console.log('Flight data:', flight)
+    console.log('Color palette:', colorPalette)
 
     // Generate share image
     console.log('2. Generating share image...')
     const imageBlob = await generateFlightShareImage({
       flight,
+      colorPalette,
     })
     console.log('3. Image generated, size:', imageBlob.size)
 
