@@ -1,15 +1,18 @@
 "use client"
 
-import { useEffect, useState } from "react"
-import { X } from "lucide-react"
+import { useEffect, useState, useRef } from "react"
+import { X, Sparkles, MapIcon } from "lucide-react"
 import { haptic } from "@/lib/haptics"
 
 interface MapEducatorTooltipProps {
   onDismiss: () => void
+  tileStyle?: string
 }
 
-export function MapEducatorTooltip({ onDismiss }: MapEducatorTooltipProps) {
+export function MapEducatorTooltip({ onDismiss, tileStyle }: MapEducatorTooltipProps) {
   const [isVisible, setIsVisible] = useState(false)
+  const [pointerPosition, setPointerPosition] = useState<number | null>(null)
+  const initialTileStyleRef = useRef(tileStyle)
 
   useEffect(() => {
     // Fade in after a short delay
@@ -19,6 +22,44 @@ export function MapEducatorTooltip({ onDismiss }: MapEducatorTooltipProps) {
     return () => clearTimeout(timer)
   }, [])
 
+  // Find and track the Map icon position
+  useEffect(() => {
+    const findMapIcon = () => {
+      // Find all tab buttons in the bottom nav
+      const navButtons = Array.from(document.querySelectorAll('button[class*="touch-manipulation"]'))
+
+      // Find the Map button (should have "Map" text)
+      for (const button of navButtons) {
+        const textElement = button.querySelector('span')
+        if (textElement?.textContent?.trim() === 'Map') {
+          const rect = button.getBoundingClientRect()
+          const centerX = rect.left + rect.width / 2
+          setPointerPosition(centerX)
+          break
+        }
+      }
+    }
+
+    // Initial find
+    findMapIcon()
+
+    // Update on resize
+    window.addEventListener('resize', findMapIcon)
+
+    return () => window.removeEventListener('resize', findMapIcon)
+  }, [])
+
+  // Auto-dismiss when user changes map style
+  useEffect(() => {
+    if (tileStyle && tileStyle !== initialTileStyleRef.current) {
+      // User used the feature! Auto-dismiss after 3 seconds
+      const timer = setTimeout(() => {
+        handleDismiss()
+      }, 3000)
+      return () => clearTimeout(timer)
+    }
+  }, [tileStyle])
+
   const handleDismiss = () => {
     haptic.light()
     setIsVisible(false)
@@ -26,41 +67,57 @@ export function MapEducatorTooltip({ onDismiss }: MapEducatorTooltipProps) {
   }
 
   return (
-    <div
-      className={`fixed bottom-20 left-4 right-4 z-[60] transition-all duration-300 ${
-        isVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"
-      }`}
-    >
-      <div className="relative bg-gradient-to-br from-blue-500/95 to-blue-600/95 backdrop-blur-xl rounded-2xl p-4 shadow-2xl shadow-blue-500/30 border border-blue-400/30">
-        {/* Close button */}
-        <button
-          onClick={handleDismiss}
-          className="absolute -top-2 -right-2 w-7 h-7 bg-white/20 hover:bg-white/30 active:bg-white/40 backdrop-blur-xl rounded-full flex items-center justify-center border border-white/30 shadow-lg transition-all"
-        >
-          <X className="w-4 h-4 text-white" strokeWidth={2.5} />
-        </button>
+    <>
+      {/* Apple-style card - positioned above nav */}
+      <div
+        className={`fixed bottom-20 left-0 right-0 z-[60] px-4 transition-all duration-300 ${
+          isVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-8"
+        }`}
+      >
+        <div className="relative mx-auto max-w-sm">
+          {/* Main card with Apple design */}
+          <div className="relative bg-slate-900/95 backdrop-blur-xl rounded-2xl border border-white/20 shadow-2xl overflow-hidden">
+            {/* Content container */}
+            <div className="relative px-5 py-4">
+              {/* Header with icon and close button */}
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 bg-blue-500 rounded-lg flex items-center justify-center">
+                    <Sparkles className="w-4.5 h-4.5 text-white" strokeWidth={2.5} />
+                  </div>
+                  <h3 className="text-white font-semibold text-base">Pro Tip</h3>
+                </div>
+                <button
+                  onClick={handleDismiss}
+                  className="w-7 h-7 bg-slate-800/60 hover:bg-slate-700/60 active:bg-slate-600/60 rounded-full flex items-center justify-center transition-colors"
+                >
+                  <X className="w-4 h-4 text-white/90" strokeWidth={2} />
+                </button>
+              </div>
 
-        {/* Content */}
-        <div className="flex items-start gap-3">
-          {/* Icon */}
-          <div className="flex-shrink-0 w-10 h-10 bg-white/20 backdrop-blur-xl rounded-full flex items-center justify-center border border-white/30">
-            <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-          </div>
-
-          {/* Text */}
-          <div className="flex-1 pr-4">
-            <h3 className="text-white font-semibold text-[15px] mb-1">Pro Tip!</h3>
-            <p className="text-white/90 text-[13px] leading-relaxed">
-              Press and hold the <span className="font-semibold">Map icon</span> to switch between different map styles (Street, Dark, Satellite, etc.)
-            </p>
+              {/* Message */}
+              <p className="text-slate-300 text-[15px] leading-relaxed">
+                Press and hold the <MapIcon className="inline w-4 h-4 mb-0.5 text-blue-400" /> <span className="font-medium text-white">Map</span> icon below to switch between map styles
+              </p>
+            </div>
           </div>
         </div>
-
-        {/* Pointer arrow pointing to map icon */}
-        <div className="absolute -bottom-3 right-16 w-6 h-6 bg-gradient-to-br from-blue-500/95 to-blue-600/95 rotate-45 border-r border-b border-blue-400/30" />
       </div>
-    </div>
+
+      {/* Pointer arrow - positioned directly above map icon */}
+      {pointerPosition !== null && (
+        <div
+          className={`fixed bottom-16 z-[60] transition-all duration-300 ${
+            isVisible ? "opacity-100" : "opacity-0"
+          }`}
+          style={{
+            left: `${pointerPosition}px`,
+            transform: 'translateX(-50%)'
+          }}
+        >
+          <div className="w-5 h-5 bg-slate-900/95 backdrop-blur-xl rotate-45 border-r border-b border-white/20 shadow-lg" />
+        </div>
+      )}
+    </>
   )
 }

@@ -687,4 +687,24 @@
       transition-duration: 150ms !important;
     }
   }
+
+  /* Map icon hold progress animation */
+  @keyframes dash {
+    from {
+      stroke-dashoffset: 63;
+    }
+    to {
+      stroke-dashoffset: 0;
+    }
+  }
+
+  /* Shimmer effect for tooltip */
+  @keyframes shimmer {
+    0% {
+      transform: translateX(-100%);
+    }
+    100% {
+      transform: translateX(100%);
+    }
+  }
 }

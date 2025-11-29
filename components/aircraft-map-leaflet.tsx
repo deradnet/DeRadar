@@ -6,7 +6,7 @@ import { createAircraftIcon } from "@/lib/aircraft-icons"
 import L from "leaflet"
 import "leaflet/dist/leaflet.css"
 
-export type MapTileStyle = "dark" | "light" | "satellite" | "terrain"
+export type MapTileStyle = "dark" | "satellite" | "terrain"
 
 interface AircraftMapProps {
   aircraft: Aircraft[]
@@ -16,22 +16,22 @@ interface AircraftMapProps {
   tileStyle?: MapTileStyle
 }
 
-const TILE_LAYERS: Record<MapTileStyle, { url: string; attribution: string }> = {
+const TILE_LAYERS: Record<MapTileStyle, { url: string; attribution: string; maxZoom?: number; subdomains?: string[] }> = {
   dark: {
     url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
-    attribution: '© OpenStreetMap contributors © CARTO'
-  },
-  light: {
-    url: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
-    attribution: '© OpenStreetMap contributors © CARTO'
+    attribution: '© OpenStreetMap contributors © CARTO',
+    subdomains: ['a', 'b', 'c', 'd']
   },
   satellite: {
-    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-    attribution: 'Esri, DigitalGlobe, GeoEye, Earthstar Geographics, CNES/Airbus DS, USDA, USGS, AeroGRID, IGN, and the GIS User Community'
+    url: 'https://mt{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}',
+    attribution: '© Google',
+    maxZoom: 20,
+    subdomains: ['0', '1', '2', '3']
   },
   terrain: {
-    url: 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',
-    attribution: '© OpenStreetMap contributors, SRTM | © OpenTopoMap'
+    url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+    attribution: '© OpenStreetMap contributors',
+    subdomains: ['a', 'b', 'c']
   }
 }
 
@@ -46,6 +46,7 @@ export function AircraftMapLeaflet({ aircraft, onFlightSelect, highlightedHex, o
   const updateMarkersRef = useRef<(() => void) | null>(null)
   const cacheRef = useRef<Cache | null>(null) // Pre-opened cache for faster access
   const tileLayerRef = useRef<any>(null) // Reference to current tile layer
+  const initialTileStyleRef = useRef<MapTileStyle>(tileStyle) // Track initial tile style
 
   // Initialize map
   useEffect(() => {
@@ -83,9 +84,9 @@ export function AircraftMapLeaflet({ aircraft, onFlightSelect, highlightedHex, o
         // Add tiles with selected style
         const layerConfig = TILE_LAYERS[tileStyle]
         const tileLayer = L.tileLayer(layerConfig.url, {
-          maxZoom: 18,
+          maxZoom: layerConfig.maxZoom || 18,
           minZoom: 2,
-          subdomains: layerConfig.url.includes('{s}') ? 'abcd' : undefined,
+          subdomains: layerConfig.subdomains,
           crossOrigin: true,
           updateWhenIdle: false, // Load tiles during panning, not after
           updateWhenZooming: true, // Load tiles during zoom
@@ -210,60 +211,53 @@ export function AircraftMapLeaflet({ aircraft, onFlightSelect, highlightedHex, o
 
   // Handle tile style changes
   useEffect(() => {
-    if (!mapRef.current || !tileLayerRef.current) return
-
-    const layerConfig = TILE_LAYERS[tileStyle]
-
-    // Remove old tile layer
-    mapRef.current.removeLayer(tileLayerRef.current)
-
-    // Add new tile layer
-    const newTileLayer = L.tileLayer(layerConfig.url, {
-      maxZoom: 18,
-      minZoom: 2,
-      subdomains: layerConfig.url.includes('{s}') ? 'abcd' : undefined,
-      crossOrigin: true,
-      updateWhenIdle: false,
-      updateWhenZooming: true,
-      keepBuffer: 2,
-      updateInterval: 150,
-      attribution: layerConfig.attribution,
-    })
-
-    // Apply caching to new layer
-    const originalCreateTile = (newTileLayer as any)._createTile
-    ;(newTileLayer as any)._createTile = function() {
-      const tile = originalCreateTile.call(this)
-      const originalSrc = tile.src
-
-      if (cacheRef.current) {
-        cacheRef.current.match(originalSrc).then(response => {
-          if (response) {
-            response.blob().then(blob => {
-              const cachedUrl = URL.createObjectURL(blob)
-              if (!tile.complete || tile.naturalWidth === 0) {
-                tile.src = cachedUrl
-              }
-            })
-          } else {
-            tile.addEventListener('load', () => {
-              if (cacheRef.current) {
-                fetch(originalSrc).then(fetchResponse => {
-                  if (fetchResponse.ok) {
-                    cacheRef.current!.put(originalSrc, fetchResponse.clone())
-                  }
-                }).catch(() => {})
-              }
-            }, { once: true })
-          }
-        }).catch(() => {})
-      }
-
-      return tile
+    // Skip if map not initialized yet
+    if (!mapRef.current || !tileLayerRef.current || !mountedRef.current) {
+      console.log(`Map tile switch skipped - not ready. Map: ${!!mapRef.current}, Layer: ${!!tileLayerRef.current}, Mounted: ${mountedRef.current}`)
+      return
     }
 
-    newTileLayer.addTo(mapRef.current)
-    tileLayerRef.current = newTileLayer
+    // Skip ONLY on the very first render (before any user interaction)
+    // After first interaction, we need to allow switching back to the initial style
+    if (tileStyle === initialTileStyleRef.current && !mapRef.current._tileSwitched) {
+      console.log(`Map tile switch skipped - initial style (${tileStyle})`)
+      return
+    }
+
+    const layerConfig = TILE_LAYERS[tileStyle]
+    console.log(`Switching map tiles to: ${tileStyle}`, layerConfig)
+
+    try {
+      // Remove old tile layer safely
+      if (mapRef.current.hasLayer(tileLayerRef.current)) {
+        console.log('Removing old tile layer')
+        mapRef.current.removeLayer(tileLayerRef.current)
+      }
+
+      // Add new tile layer without caching to avoid issues
+      const newTileLayer = L.tileLayer(layerConfig.url, {
+        maxZoom: layerConfig.maxZoom || 18,
+        minZoom: 2,
+        subdomains: layerConfig.subdomains,
+        crossOrigin: true,
+        updateWhenIdle: false,
+        updateWhenZooming: true,
+        keepBuffer: 2,
+        updateInterval: 150,
+        attribution: layerConfig.attribution,
+      })
+
+      console.log('Adding new tile layer')
+      newTileLayer.addTo(mapRef.current)
+      tileLayerRef.current = newTileLayer
+
+      // Mark that we've switched at least once
+      mapRef.current._tileSwitched = true
+
+      console.log(`Successfully switched to ${tileStyle} tiles`)
+    } catch (error) {
+      console.error('Error changing tile style:', error)
+    }
   }, [tileStyle])
 
   // Update aircraft markers with batching

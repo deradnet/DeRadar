@@ -51,7 +51,7 @@ export default function DeradFlightTracker() {
   const [activeChartIndex, setActiveChartIndex] = useState(0)
   const [miniAppIcon, setMiniAppIcon] = useState<string | null>(null)
   const [miniAppAutoOpen, setMiniAppAutoOpen] = useState<{ id: string; query?: { callsign?: string; icao?: string } } | undefined>(undefined)
-  const [mapTileStyle, setMapTileStyle] = useState<"dark" | "light" | "satellite" | "terrain">("dark")
+  const [mapTileStyle, setMapTileStyle] = useState<"dark" | "satellite" | "terrain">("dark")
   const [showMapEducator, setShowMapEducator] = useState(false)
 
   // Reset mini app icon when switching away from miniapps tab
@@ -90,13 +90,15 @@ export default function DeradFlightTracker() {
     }
   }, [activeMobileTab, isNativeApp])
 
-  // Handle map layout switch (cycle through styles)
+  // Handle map layout switch (cycle through 3 styles: dark, satellite, terrain)
   const handleMapLayoutSwitch = useCallback(() => {
     setMapTileStyle((currentStyle) => {
-      const styles: Array<"dark" | "light" | "satellite" | "terrain"> = ["dark", "light", "satellite", "terrain"]
+      const styles: Array<"dark" | "satellite" | "terrain"> = ["dark", "satellite", "terrain"]
       const currentIndex = styles.indexOf(currentStyle)
       const nextIndex = (currentIndex + 1) % styles.length
-      return styles[nextIndex]
+      const nextStyle = styles[nextIndex]
+      console.log(`Map style switching: ${currentStyle} -> ${nextStyle}`)
+      return nextStyle
     })
   }, [])
 
@@ -641,6 +643,7 @@ export default function DeradFlightTracker() {
       {/* Map Educator Tooltip */}
       {showMapEducator && (
         <MapEducatorTooltip
+          tileStyle={mapTileStyle}
           onDismiss={() => {
             setShowMapEducator(false)
             localStorage.setItem('deradar_map_educator_seen', 'true')

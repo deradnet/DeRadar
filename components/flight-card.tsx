@@ -531,7 +531,7 @@ export function FlightCard({ selectedFlight, onClose, onShowOnMap, allFlights = 
             {/* Glow blob */}
             <div className="absolute top-0 right-0 w-40 h-40 bg-white/20 rounded-full blur-[80px] -z-10" />
 
-            <div className="p-6">
+            <div className="px-6 pt-4 pb-4">
               {/* Aircraft Image Section - Always show to prevent layout shift */}
               <div className="mb-4 relative h-40">
                 {/* Live badge - positioned in top left corner */}
@@ -1023,8 +1023,8 @@ export function FlightCard({ selectedFlight, onClose, onShowOnMap, allFlights = 
               </div>
 
               {/* Bottom Info Grid */}
-              <div className="grid grid-cols-3 gap-2 mb-4">
-                <div className="bg-white/10 p-3 rounded-xl">
+              <div className="grid grid-cols-3 gap-2">
+                <div className="bg-white/10 p-2.5 rounded-xl">
                   <div className="flex items-center gap-1 text-[10px] text-white/50 uppercase mb-1">
                     <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                       <circle cx="12" cy="12" r="10" />
@@ -1037,7 +1037,7 @@ export function FlightCard({ selectedFlight, onClose, onShowOnMap, allFlights = 
                   </div>
                 </div>
 
-                <div className="bg-white/10 p-3 rounded-xl">
+                <div className="bg-white/10 p-2.5 rounded-xl">
                   <div className="flex items-center gap-1 text-[10px] text-white/50 uppercase mb-1">
                     <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                       <path d="M12 2L2 7L12 12L22 7L12 2Z" />
@@ -1051,7 +1051,7 @@ export function FlightCard({ selectedFlight, onClose, onShowOnMap, allFlights = 
                   </div>
                 </div>
 
-                <div className="bg-white/10 p-3 rounded-xl">
+                <div className="bg-white/10 p-2.5 rounded-xl">
                   <div className="flex items-center gap-1 text-[10px] text-white/50 uppercase mb-1">
                     <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                       <rect x="3" y="3" width="18" height="18" rx="2" />

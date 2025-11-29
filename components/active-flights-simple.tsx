@@ -131,27 +131,27 @@ export function ActiveFlightsSimple({
                       )}
 
                       {/* Flight Data */}
-                      <div className="flex items-center gap-2.5 text-sm flex-wrap">
+                      <div className="flex items-center gap-2 text-sm flex-wrap">
                         {flight.alt_baro !== undefined && flight.alt_baro > 0 && (
-                          <div className="flex items-center gap-1.5 px-2 py-1 bg-blue-500/10 rounded-lg">
-                            <span className="text-slate-400 text-xs">ALT</span>
-                            <span className="text-blue-400 font-mono font-semibold">
+                          <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-gradient-to-br from-cyan-500/15 to-blue-500/15 border border-cyan-500/20 rounded-xl backdrop-blur-sm">
+                            <span className="text-cyan-300/70 text-[10px] font-semibold tracking-wide">ALT</span>
+                            <span className="text-cyan-300 font-mono font-bold text-xs">
                               {flight.alt_baro.toLocaleString()}
                             </span>
                           </div>
                         )}
                         {flight.gs !== undefined && flight.gs > 0 && (
-                          <div className="flex items-center gap-1.5 px-2 py-1 bg-orange-500/10 rounded-lg">
-                            <span className="text-slate-400 text-xs">SPD</span>
-                            <span className="text-orange-400 font-mono font-semibold">
+                          <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-gradient-to-br from-orange-500/15 to-amber-500/15 border border-orange-500/20 rounded-xl backdrop-blur-sm">
+                            <span className="text-orange-300/70 text-[10px] font-semibold tracking-wide">SPD</span>
+                            <span className="text-orange-300 font-mono font-bold text-xs">
                               {Math.round(flight.gs)}
                             </span>
                           </div>
                         )}
                         {flight.track !== undefined && (
-                          <div className="flex items-center gap-1.5 px-2 py-1 bg-purple-500/10 rounded-lg">
-                            <span className="text-slate-400 text-xs">HDG</span>
-                            <span className="text-purple-400 font-mono font-semibold">
+                          <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-gradient-to-br from-purple-500/15 to-pink-500/15 border border-purple-500/20 rounded-xl backdrop-blur-sm">
+                            <span className="text-purple-300/70 text-[10px] font-semibold tracking-wide">HDG</span>
+                            <span className="text-purple-300 font-mono font-bold text-xs">
                               {Math.round(flight.track)}°
                             </span>
                           </div>
@@ -160,9 +160,9 @@ export function ActiveFlightsSimple({
 
                       {/* Emergency Badge */}
                       {isEmergency && (
-                        <div className="inline-flex items-center gap-1.5 mt-2 px-2 py-0.5 bg-red-500/20 border border-red-500/30 rounded text-[10px] text-red-300 font-semibold uppercase">
-                          <div className="w-1.5 h-1.5 bg-red-400 rounded-full animate-pulse" />
-                          {flight.emergency}
+                        <div className="inline-flex items-center gap-2 mt-2 px-3 py-1.5 bg-gradient-to-r from-red-500/25 to-rose-500/25 border border-red-500/40 rounded-xl backdrop-blur-sm shadow-lg shadow-red-500/20">
+                          <div className="w-2 h-2 bg-red-400 rounded-full animate-pulse shadow-lg shadow-red-500/50" />
+                          <span className="text-[11px] text-red-200 font-bold tracking-wide uppercase">{flight.emergency}</span>
                         </div>
                       )}
                     </div>
@@ -194,7 +194,7 @@ export function ActiveFlightsSimple({
                               (window as any).Capacitor.Plugins.Haptics.impact({ style: 'light' })
                             }
                           }}
-                          className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-500/20 hover:bg-blue-500/30 active:bg-blue-500/40 border border-blue-500/40 rounded-lg transition-all active:scale-95 text-blue-400 text-xs font-medium"
+                          className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-blue-500/20 to-cyan-500/20 hover:from-blue-500/30 hover:to-cyan-500/30 active:from-blue-500/40 active:to-cyan-500/40 border border-blue-500/30 rounded-xl transition-all active:scale-95 text-cyan-300 text-xs font-semibold shadow-lg shadow-blue-500/10"
                         >
                           <Locate className="w-3.5 h-3.5" />
                           <span>Map</span>

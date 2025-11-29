@@ -28,6 +28,8 @@ export function MobileBottomNav({ activeTab, onTabChange, isNativeApp = false, s
   const [showPixelWave, setShowPixelWave] = useState(false)
   const [isFadingOut, setIsFadingOut] = useState(false)
   const [keyboardHeight, setKeyboardHeight] = useState(0)
+  const [isMapHolding, setIsMapHolding] = useState(false)
+  const [isMapSwitching, setIsMapSwitching] = useState(false)
   const holdTimerRef = useRef<NodeJS.Timeout | null>(null)
   const mapHoldTimerRef = useRef<NodeJS.Timeout | null>(null)
   const isHoldingRef = useRef(false)
@@ -145,18 +147,29 @@ export function MobileBottomNav({ activeTab, onTabChange, isNativeApp = false, s
     // Only allow map layout switching when already on map tab
     if (activeTab !== "map") return
 
+    setIsMapHolding(true)
     isMapHoldingRef.current = true
     mapHoldTimerRef.current = setTimeout(async () => {
       if (isMapHoldingRef.current && onMapLayoutSwitch) {
         // Trigger haptic feedback for long-press action
         await haptic.medium()
+
+        // Show switching animation
+        setIsMapSwitching(true)
         onMapLayoutSwitch()
+
+        // Reset animations after switch
+        setTimeout(() => {
+          setIsMapHolding(false)
+          setIsMapSwitching(false)
+        }, 400)
       }
     }, 500) // 500ms hold to trigger
   }
 
   const handleMapRelease = () => {
     isMapHoldingRef.current = false
+    setIsMapHolding(false)
     if (mapHoldTimerRef.current) {
       clearTimeout(mapHoldTimerRef.current)
       mapHoldTimerRef.current = null
@@ -262,8 +275,29 @@ export function MobileBottomNav({ activeTab, onTabChange, isNativeApp = false, s
                     style={{ willChange: "transform" }}
                   />
                 ) : (
-                  <Icon className={`w-6 h-6 transition-all duration-150 ${isActive && !isRadar ? "fill-blue-400 scale-110" : isActive ? "scale-110" : "scale-100"} ${isHomeRefreshing && isRadar ? "animate-spin" : ""}`}
-                    style={{ willChange: "transform" }} />
+                  <div className="relative">
+                    <Icon className={`w-6 h-6 transition-all duration-150 ${isActive && !isRadar ? "fill-blue-400 scale-110" : isActive ? "scale-110" : "scale-100"} ${isHomeRefreshing && isRadar ? "animate-spin" : ""} ${isMap && isMapHolding ? "scale-90 opacity-60" : ""} ${isMap && isMapSwitching ? "rotate-180" : ""}`}
+                      style={{ willChange: "transform" }} />
+                    {/* Hold progress ring for map icon */}
+                    {isMap && isMapHolding && (
+                      <svg className="absolute inset-0 w-full h-full -rotate-90 pointer-events-none" viewBox="0 0 24 24">
+                        <circle
+                          cx="12"
+                          cy="12"
+                          r="10"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeDasharray="63"
+                          strokeDashoffset="0"
+                          className="text-blue-400 opacity-30 animate-[dash_0.5s_linear]"
+                          style={{
+                            animation: 'dash 0.5s linear forwards',
+                          }}
+                        />
+                      </svg>
+                    )}
+                  </div>
                 )}
                 <span className={`text-[10px] font-medium transition-opacity duration-150 ${isActive ? "opacity-100" : "opacity-80"}`}>
                   {tab.label}

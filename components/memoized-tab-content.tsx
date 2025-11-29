@@ -114,7 +114,7 @@ export const MapTabContent = memo(function MapTabContent({
   onFlightSelect: (flight: Aircraft) => void
   highlightedHex?: string | null
   onHighlightClear?: () => void
-  tileStyle?: "dark" | "light" | "satellite" | "terrain"
+  tileStyle?: "dark" | "satellite" | "terrain"
 }) {
   return (
     <Suspense
