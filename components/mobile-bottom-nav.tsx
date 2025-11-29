@@ -20,15 +20,18 @@ interface MobileBottomNavProps {
   hasActiveFilters?: boolean
   onHomeRefresh?: () => Promise<void>
   miniAppIcon?: string | null
+  onMapLayoutSwitch?: () => void
 }
 
-export function MobileBottomNav({ activeTab, onTabChange, isNativeApp = false, searchTerm = "", onSearchChange, onFilterClick, hasActiveFilters = false, onHomeRefresh, miniAppIcon }: MobileBottomNavProps) {
+export function MobileBottomNav({ activeTab, onTabChange, isNativeApp = false, searchTerm = "", onSearchChange, onFilterClick, hasActiveFilters = false, onHomeRefresh, miniAppIcon, onMapLayoutSwitch }: MobileBottomNavProps) {
   const [isHomeRefreshing, setIsHomeRefreshing] = useState(false)
   const [showPixelWave, setShowPixelWave] = useState(false)
   const [isFadingOut, setIsFadingOut] = useState(false)
   const [keyboardHeight, setKeyboardHeight] = useState(0)
   const holdTimerRef = useRef<NodeJS.Timeout | null>(null)
+  const mapHoldTimerRef = useRef<NodeJS.Timeout | null>(null)
   const isHoldingRef = useRef(false)
+  const isMapHoldingRef = useRef(false)
   const searchInputRef = useRef<HTMLInputElement>(null)
 
   // Only show in native app
@@ -138,6 +141,28 @@ export function MobileBottomNav({ activeTab, onTabChange, isNativeApp = false, s
     }
   }
 
+  const handleMapPress = () => {
+    // Only allow map layout switching when already on map tab
+    if (activeTab !== "map") return
+
+    isMapHoldingRef.current = true
+    mapHoldTimerRef.current = setTimeout(async () => {
+      if (isMapHoldingRef.current && onMapLayoutSwitch) {
+        // Trigger haptic feedback for long-press action
+        await haptic.medium()
+        onMapLayoutSwitch()
+      }
+    }, 500) // 500ms hold to trigger
+  }
+
+  const handleMapRelease = () => {
+    isMapHoldingRef.current = false
+    if (mapHoldTimerRef.current) {
+      clearTimeout(mapHoldTimerRef.current)
+      mapHoldTimerRef.current = null
+    }
+  }
+
   const navBarHeight = activeTab === "flights" && onSearchChange ? 120 : 64
 
   return (
@@ -207,6 +232,7 @@ export function MobileBottomNav({ activeTab, onTabChange, isNativeApp = false, s
             const isActive = activeTab === tab.id
             const Icon = tab.icon
             const isRadar = tab.id === "home"
+            const isMap = tab.id === "map"
             const isMiniApps = tab.id === "miniapps"
             const showCustomIcon = isMiniApps && miniAppIcon
 
@@ -214,12 +240,12 @@ export function MobileBottomNav({ activeTab, onTabChange, isNativeApp = false, s
               <button
                 key={tab.id}
                 onClick={() => handleTabClick(tab.id)}
-                onTouchStart={isRadar ? handleHomePress : undefined}
-                onTouchEnd={isRadar ? handleHomeRelease : undefined}
-                onTouchCancel={isRadar ? handleHomeRelease : undefined}
-                onMouseDown={isRadar ? handleHomePress : undefined}
-                onMouseUp={isRadar ? handleHomeRelease : undefined}
-                onMouseLeave={isRadar ? handleHomeRelease : undefined}
+                onTouchStart={isRadar ? handleHomePress : isMap ? handleMapPress : undefined}
+                onTouchEnd={isRadar ? handleHomeRelease : isMap ? handleMapRelease : undefined}
+                onTouchCancel={isRadar ? handleHomeRelease : isMap ? handleMapRelease : undefined}
+                onMouseDown={isRadar ? handleHomePress : isMap ? handleMapPress : undefined}
+                onMouseUp={isRadar ? handleHomeRelease : isMap ? handleMapRelease : undefined}
+                onMouseLeave={isRadar ? handleHomeRelease : isMap ? handleMapRelease : undefined}
                 className={`relative flex flex-col items-center justify-center gap-1 h-16 transition-all duration-150 touch-manipulation ${
                   isActive ? "text-blue-400" : "text-slate-400 active:text-slate-300"
                 }`}

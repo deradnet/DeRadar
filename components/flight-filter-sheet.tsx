@@ -1,8 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { X, Filter } from "lucide-react"
-import { Button } from "@/components/ui/button"
+import { X, Filter, ChevronRight } from "lucide-react"
 import { haptic } from "@/lib/haptics"
 
 export interface FlightFilters {
@@ -51,146 +50,190 @@ export function FlightFilterSheet({ isOpen, onClose, filters, onApplyFilters }: 
     <>
       {/* Backdrop */}
       <div
-        className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 animate-in fade-in duration-200"
-        onClick={onClose}
+        className="fixed inset-0 bg-black/50 backdrop-blur-md z-50"
+        onClick={() => {
+          haptic.light()
+          onClose()
+        }}
       />
 
-      {/* Filter Sheet */}
-      <div className="fixed inset-x-0 bottom-0 z-50 bg-gradient-to-b from-slate-900 to-slate-950 border-t border-white/10 rounded-t-3xl shadow-2xl animate-in slide-in-from-bottom duration-300 max-h-[80vh] overflow-hidden">
+      {/* Filter Sheet - Native style */}
+      <div className="fixed inset-x-0 bottom-0 z-50 bg-slate-950 rounded-t-[20px] animate-in slide-in-from-bottom duration-300 max-h-[85vh] flex flex-col">
+        {/* Handle */}
+        <div className="flex justify-center pt-2 pb-3">
+          <div className="w-9 h-1 bg-white/30 rounded-full" />
+        </div>
+
         {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-white/10">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-full bg-blue-500/10 flex items-center justify-center">
-              <Filter className="w-5 h-5 text-blue-400" />
-            </div>
-            <h2 className="text-xl font-bold text-white">Filter Flights</h2>
+        <div className="px-4 pb-3">
+          <div className="flex items-center justify-between">
+            <h1 className="text-[28px] font-bold text-white tracking-tight">Filters</h1>
+            <button
+              onClick={() => {
+                haptic.light()
+                onClose()
+              }}
+              className="w-8 h-8 rounded-full bg-white/10 active:bg-white/20 flex items-center justify-center"
+            >
+              <X className="w-5 h-5 text-white/80" strokeWidth={2.5} />
+            </button>
           </div>
-          <button
-            onClick={() => {
-              haptic.light()
-              onClose()
-            }}
-            className="w-10 h-10 rounded-full bg-white/5 hover:bg-white/10 active:bg-white/15 flex items-center justify-center transition-all"
-          >
-            <X className="w-5 h-5 text-slate-400" />
-          </button>
         </div>
 
-        {/* Content */}
-        <div className="p-6 space-y-6 overflow-y-auto max-h-[calc(80vh-180px)]">
-          {/* Altitude Range */}
-          <div className="space-y-3">
-            <label className="text-sm font-medium text-slate-300">Altitude (feet)</label>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="text-xs text-slate-400 mb-1 block">Min</label>
-                <input
-                  type="number"
-                  value={localFilters.minAltitude}
-                  onChange={(e) => setLocalFilters({ ...localFilters, minAltitude: Number(e.target.value) })}
-                  className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-white focus:border-blue-400/50 focus:bg-white/10 transition-all"
-                  placeholder="0"
-                />
-              </div>
-              <div>
-                <label className="text-xs text-slate-400 mb-1 block">Max</label>
-                <input
-                  type="number"
-                  value={localFilters.maxAltitude}
-                  onChange={(e) => setLocalFilters({ ...localFilters, maxAltitude: Number(e.target.value) })}
-                  className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-white focus:border-blue-400/50 focus:bg-white/10 transition-all"
-                  placeholder="50000"
-                />
-              </div>
-            </div>
-          </div>
+        {/* Content - Scrollable with proper padding for buttons */}
+        <div className="flex-1 overflow-y-auto pb-safe">
+          <div className="px-4 pb-32 space-y-6">
 
-          {/* Speed Range */}
-          <div className="space-y-3">
-            <label className="text-sm font-medium text-slate-300">Speed (knots)</label>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="text-xs text-slate-400 mb-1 block">Min</label>
-                <input
-                  type="number"
-                  value={localFilters.minSpeed}
-                  onChange={(e) => setLocalFilters({ ...localFilters, minSpeed: Number(e.target.value) })}
-                  className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-white focus:border-blue-400/50 focus:bg-white/10 transition-all"
-                  placeholder="0"
-                />
-              </div>
-              <div>
-                <label className="text-xs text-slate-400 mb-1 block">Max</label>
-                <input
-                  type="number"
-                  value={localFilters.maxSpeed}
-                  onChange={(e) => setLocalFilters({ ...localFilters, maxSpeed: Number(e.target.value) })}
-                  className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-white focus:border-blue-400/50 focus:bg-white/10 transition-all"
-                  placeholder="700"
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Aircraft Types */}
-          <div className="space-y-3">
-            <label className="text-sm font-medium text-slate-300">Aircraft Types</label>
+            {/* Altitude Section */}
             <div className="space-y-2">
-              <label className="flex items-center justify-between p-3 bg-white/5 rounded-lg border border-white/10 cursor-pointer hover:bg-white/10 transition-all">
-                <span className="text-white">Emergency Aircraft</span>
-                <input
-                  type="checkbox"
-                  checked={localFilters.showEmergency}
-                  onChange={(e) => {
-                    haptic.selection()
-                    setLocalFilters({ ...localFilters, showEmergency: e.target.checked })
-                  }}
-                  className="w-5 h-5 rounded border-white/20 bg-white/5 checked:bg-blue-500 focus:ring-2 focus:ring-blue-400/50"
-                />
-              </label>
-              <label className="flex items-center justify-between p-3 bg-white/5 rounded-lg border border-white/10 cursor-pointer hover:bg-white/10 transition-all">
-                <span className="text-white">Military Aircraft</span>
-                <input
-                  type="checkbox"
-                  checked={localFilters.showMilitary}
-                  onChange={(e) => {
-                    haptic.selection()
-                    setLocalFilters({ ...localFilters, showMilitary: e.target.checked })
-                  }}
-                  className="w-5 h-5 rounded border-white/20 bg-white/5 checked:bg-blue-500 focus:ring-2 focus:ring-blue-400/50"
-                />
-              </label>
-              <label className="flex items-center justify-between p-3 bg-white/5 rounded-lg border border-white/10 cursor-pointer hover:bg-white/10 transition-all">
-                <span className="text-white">Commercial Aircraft</span>
-                <input
-                  type="checkbox"
-                  checked={localFilters.showCommercial}
-                  onChange={(e) => {
-                    haptic.selection()
-                    setLocalFilters({ ...localFilters, showCommercial: e.target.checked })
-                  }}
-                  className="w-5 h-5 rounded border-white/20 bg-white/5 checked:bg-blue-500 focus:ring-2 focus:ring-blue-400/50"
-                />
-              </label>
+              <h2 className="text-[13px] font-semibold text-white/50 uppercase tracking-wide px-1">Altitude</h2>
+              <div className="bg-slate-900/50 rounded-[12px] overflow-hidden border border-white/10">
+                <div className="flex items-center px-4 py-3 border-b border-white/10">
+                  <span className="text-[17px] text-white flex-1">Minimum</span>
+                  <input
+                    type="number"
+                    value={localFilters.minAltitude}
+                    onChange={(e) => {
+                      haptic.selection()
+                      setLocalFilters({ ...localFilters, minAltitude: Number(e.target.value) })
+                    }}
+                    className="w-24 text-right text-[17px] bg-transparent text-white/60 outline-none font-mono"
+                    placeholder="0"
+                  />
+                  <span className="text-[17px] text-white/40 ml-2">ft</span>
+                </div>
+                <div className="flex items-center px-4 py-3">
+                  <span className="text-[17px] text-white flex-1">Maximum</span>
+                  <input
+                    type="number"
+                    value={localFilters.maxAltitude}
+                    onChange={(e) => {
+                      haptic.selection()
+                      setLocalFilters({ ...localFilters, maxAltitude: Number(e.target.value) })
+                    }}
+                    className="w-24 text-right text-[17px] bg-transparent text-white/60 outline-none font-mono"
+                    placeholder="50000"
+                  />
+                  <span className="text-[17px] text-white/40 ml-2">ft</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Speed Section */}
+            <div className="space-y-2">
+              <h2 className="text-[13px] font-semibold text-white/50 uppercase tracking-wide px-1">Speed</h2>
+              <div className="bg-slate-900/50 rounded-[12px] overflow-hidden border border-white/10">
+                <div className="flex items-center px-4 py-3 border-b border-white/10">
+                  <span className="text-[17px] text-white flex-1">Minimum</span>
+                  <input
+                    type="number"
+                    value={localFilters.minSpeed}
+                    onChange={(e) => {
+                      haptic.selection()
+                      setLocalFilters({ ...localFilters, minSpeed: Number(e.target.value) })
+                    }}
+                    className="w-20 text-right text-[17px] bg-transparent text-white/60 outline-none font-mono"
+                    placeholder="0"
+                  />
+                  <span className="text-[17px] text-white/40 ml-2">kts</span>
+                </div>
+                <div className="flex items-center px-4 py-3">
+                  <span className="text-[17px] text-white flex-1">Maximum</span>
+                  <input
+                    type="number"
+                    value={localFilters.maxSpeed}
+                    onChange={(e) => {
+                      haptic.selection()
+                      setLocalFilters({ ...localFilters, maxSpeed: Number(e.target.value) })
+                    }}
+                    className="w-20 text-right text-[17px] bg-transparent text-white/60 outline-none font-mono"
+                    placeholder="700"
+                  />
+                  <span className="text-[17px] text-white/40 ml-2">kts</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Aircraft Types Section */}
+            <div className="space-y-2">
+              <h2 className="text-[13px] font-semibold text-white/50 uppercase tracking-wide px-1">Aircraft Types</h2>
+              <div className="bg-slate-900/50 rounded-[12px] overflow-hidden border border-white/10 divide-y divide-white/10">
+                <label className="flex items-center px-4 py-3.5 active:bg-white/5">
+                  <div className="flex-1">
+                    <div className="text-[17px] text-white">Emergency</div>
+                    <div className="text-[13px] text-white/40 mt-0.5">7700, 7600, 7500</div>
+                  </div>
+                  <div className="relative">
+                    <input
+                      type="checkbox"
+                      checked={localFilters.showEmergency}
+                      onChange={(e) => {
+                        haptic.selection()
+                        setLocalFilters({ ...localFilters, showEmergency: e.target.checked })
+                      }}
+                      className="sr-only peer"
+                    />
+                    <div className="w-[51px] h-[31px] bg-white/20 rounded-full peer transition-all peer-checked:bg-[#34C759]" />
+                    <div className="absolute left-[2px] top-[2px] w-[27px] h-[27px] bg-white rounded-full shadow-md transition-transform peer-checked:translate-x-[20px]" />
+                  </div>
+                </label>
+                <label className="flex items-center px-4 py-3.5 active:bg-white/5">
+                  <div className="flex-1">
+                    <div className="text-[17px] text-white">Military</div>
+                    <div className="text-[13px] text-white/40 mt-0.5">Government flights</div>
+                  </div>
+                  <div className="relative">
+                    <input
+                      type="checkbox"
+                      checked={localFilters.showMilitary}
+                      onChange={(e) => {
+                        haptic.selection()
+                        setLocalFilters({ ...localFilters, showMilitary: e.target.checked })
+                      }}
+                      className="sr-only peer"
+                    />
+                    <div className="w-[51px] h-[31px] bg-white/20 rounded-full peer transition-all peer-checked:bg-[#34C759]" />
+                    <div className="absolute left-[2px] top-[2px] w-[27px] h-[27px] bg-white rounded-full shadow-md transition-transform peer-checked:translate-x-[20px]" />
+                  </div>
+                </label>
+                <label className="flex items-center px-4 py-3.5 active:bg-white/5">
+                  <div className="flex-1">
+                    <div className="text-[17px] text-white">Commercial</div>
+                    <div className="text-[13px] text-white/40 mt-0.5">Airlines & cargo</div>
+                  </div>
+                  <div className="relative">
+                    <input
+                      type="checkbox"
+                      checked={localFilters.showCommercial}
+                      onChange={(e) => {
+                        haptic.selection()
+                        setLocalFilters({ ...localFilters, showCommercial: e.target.checked })
+                      }}
+                      className="sr-only peer"
+                    />
+                    <div className="w-[51px] h-[31px] bg-white/20 rounded-full peer transition-all peer-checked:bg-[#34C759]" />
+                    <div className="absolute left-[2px] top-[2px] w-[27px] h-[27px] bg-white rounded-full shadow-md transition-transform peer-checked:translate-x-[20px]" />
+                  </div>
+                </label>
+              </div>
             </div>
           </div>
         </div>
 
-        {/* Footer Actions */}
-        <div className="p-6 border-t border-white/10 bg-slate-950/50 backdrop-blur-xl grid grid-cols-2 gap-3">
-          <Button
-            variant="outline"
-            onClick={handleReset}
-            className="border-white/10 bg-white/5 hover:bg-white/10 active:bg-white/15 text-white"
-          >
-            Reset
-          </Button>
-          <Button
+        {/* Footer - Fixed at bottom, always visible */}
+        <div className="sticky bottom-0 p-4 pt-3 border-t border-white/10 bg-slate-950 space-y-2.5 safe-area-inset-bottom">
+          <button
             onClick={handleApply}
-            className="bg-blue-500 hover:bg-blue-600 active:bg-blue-700 text-white shadow-lg shadow-blue-500/20"
+            className="w-full py-3.5 bg-blue-500 hover:bg-blue-600 active:bg-blue-700 rounded-[12px] text-[17px] font-semibold text-white shadow-lg"
           >
             Apply Filters
-          </Button>
+          </button>
+          <button
+            onClick={handleReset}
+            className="w-full py-3.5 bg-slate-800/80 active:bg-slate-800 rounded-[12px] text-[17px] font-medium text-white"
+          >
+            Reset to Default
+          </button>
         </div>
       </div>
     </>

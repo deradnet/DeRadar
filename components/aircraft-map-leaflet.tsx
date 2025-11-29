@@ -6,14 +6,36 @@ import { createAircraftIcon } from "@/lib/aircraft-icons"
 import L from "leaflet"
 import "leaflet/dist/leaflet.css"
 
+export type MapTileStyle = "dark" | "light" | "satellite" | "terrain"
+
 interface AircraftMapProps {
   aircraft: Aircraft[]
   onFlightSelect: (flight: Aircraft) => void
   highlightedHex?: string | null
   onHighlightClear?: () => void
+  tileStyle?: MapTileStyle
 }
 
-export function AircraftMapLeaflet({ aircraft, onFlightSelect, highlightedHex, onHighlightClear }: AircraftMapProps) {
+const TILE_LAYERS: Record<MapTileStyle, { url: string; attribution: string }> = {
+  dark: {
+    url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+    attribution: '© OpenStreetMap contributors © CARTO'
+  },
+  light: {
+    url: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
+    attribution: '© OpenStreetMap contributors © CARTO'
+  },
+  satellite: {
+    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+    attribution: 'Esri, DigitalGlobe, GeoEye, Earthstar Geographics, CNES/Airbus DS, USDA, USGS, AeroGRID, IGN, and the GIS User Community'
+  },
+  terrain: {
+    url: 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',
+    attribution: '© OpenStreetMap contributors, SRTM | © OpenTopoMap'
+  }
+}
+
+export function AircraftMapLeaflet({ aircraft, onFlightSelect, highlightedHex, onHighlightClear, tileStyle = "dark" }: AircraftMapProps) {
   const mapRef = useRef<any>(null)
   const markersRef = useRef<Map<string, any>>(new Map())
   const containerRef = useRef<HTMLDivElement>(null)
@@ -22,6 +44,8 @@ export function AircraftMapLeaflet({ aircraft, onFlightSelect, highlightedHex, o
   const mountedRef = useRef(true)
   const highlightCircleRef = useRef<any>(null)
   const updateMarkersRef = useRef<(() => void) | null>(null)
+  const cacheRef = useRef<Cache | null>(null) // Pre-opened cache for faster access
+  const tileLayerRef = useRef<any>(null) // Reference to current tile layer
 
   // Initialize map
   useEffect(() => {
@@ -33,21 +57,135 @@ export function AircraftMapLeaflet({ aircraft, onFlightSelect, highlightedHex, o
       try {
         if (!mountedRef.current) return
 
-        // Initialize Leaflet map centered on Europe
+        // Pre-open cache in background (non-blocking)
+        if ('caches' in window) {
+          const cacheName = 'deradar-map-tiles-v1'
+          caches.open(cacheName).then(cache => {
+            cacheRef.current = cache
+          }).catch(() => {
+            // Cache not available - tiles will load without caching
+          })
+        }
+
+        // Initialize Leaflet map immediately (don't wait for cache)
         const map = L.map('aircraft-map-container', {
           center: [50.0, 10.0], // Europe center
           zoom: 5,
           zoomControl: false,
           attributionControl: false,
           preferCanvas: true,
+          // Enable immediate tile loading during pan/zoom
+          fadeAnimation: false, // Disable fade for instant display
+          zoomAnimation: true,
+          markerZoomAnimation: true,
         })
 
-        // Add dark theme tiles
-        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+        // Add tiles with selected style
+        const layerConfig = TILE_LAYERS[tileStyle]
+        const tileLayer = L.tileLayer(layerConfig.url, {
           maxZoom: 18,
           minZoom: 2,
-          subdomains: 'abcd',
-        }).addTo(map)
+          subdomains: layerConfig.url.includes('{s}') ? 'abcd' : undefined,
+          crossOrigin: true,
+          updateWhenIdle: false, // Load tiles during panning, not after
+          updateWhenZooming: true, // Load tiles during zoom
+          keepBuffer: 2, // Keep 2 tile rows/cols as buffer for smooth panning
+          updateInterval: 150, // Update tiles every 150ms during pan (faster response)
+          attribution: layerConfig.attribution,
+        })
+
+        // Override tile loading to use fast cache (non-blocking)
+        const originalCreateTile = (tileLayer as any)._createTile
+        ;(tileLayer as any)._createTile = function() {
+          const tile = originalCreateTile.call(this)
+          const originalSrc = tile.src
+
+          // Non-blocking cache check - don't wait, tile loads normally
+          if (cacheRef.current) {
+            cacheRef.current.match(originalSrc).then(response => {
+              if (response) {
+                // Fast path: Replace tile source with cached version
+                response.blob().then(blob => {
+                  const cachedUrl = URL.createObjectURL(blob)
+                  // Only replace if tile hasn't loaded yet or failed
+                  if (!tile.complete || tile.naturalWidth === 0) {
+                    tile.src = cachedUrl
+                  }
+                })
+              } else {
+                // Cache miss: Let tile load normally, then cache it for next time
+                tile.addEventListener('load', () => {
+                  if (cacheRef.current) {
+                    fetch(originalSrc).then(fetchResponse => {
+                      if (fetchResponse.ok) {
+                        cacheRef.current!.put(originalSrc, fetchResponse.clone())
+                      }
+                    }).catch(() => {
+                      // Silently fail - caching is optional
+                    })
+                  }
+                }, { once: true })
+              }
+            }).catch(() => {
+              // Cache check failed - tile will load normally
+            })
+          }
+
+          return tile
+        }
+
+        tileLayer.addTo(map)
+        tileLayerRef.current = tileLayer
+
+        // Preload tiles for zoom levels 2-4 (world to continent view)
+        if (cacheRef.current) {
+          const preloadTiles = async () => {
+            if (!cacheRef.current) return
+
+            // Preload low zoom tiles (world view)
+            const tilesToPreload: string[] = []
+            const subdomains = ['a', 'b', 'c', 'd']
+
+            // Zoom level 2-4 for world to continent view
+            for (let z = 2; z <= 4; z++) {
+              const numTiles = Math.pow(2, z)
+              for (let x = 0; x < numTiles; x++) {
+                for (let y = 0; y < numTiles; y++) {
+                  const subdomain = subdomains[Math.floor(Math.random() * subdomains.length)]
+                  tilesToPreload.push(`https://${subdomain}.basemaps.cartocdn.com/dark_all/${z}/${x}/${y}.png`)
+                }
+              }
+            }
+
+            // Preload in batches to avoid overwhelming the network
+            const batchSize = 20 // Increased batch size for faster preloading
+            for (let i = 0; i < tilesToPreload.length; i += batchSize) {
+              const batch = tilesToPreload.slice(i, i + batchSize)
+              await Promise.allSettled(
+                batch.map(url =>
+                  fetch(url)
+                    .then(response => {
+                      if (response.ok && cacheRef.current) {
+                        return cacheRef.current.put(url, response.clone())
+                      }
+                    })
+                    .catch(() => {
+                      // Silently fail for individual tiles
+                    })
+                )
+              )
+              // Smaller delay between batches for faster overall preload
+              await new Promise(resolve => setTimeout(resolve, 50))
+            }
+
+            console.log('Map tiles preloaded and cached')
+          }
+
+          // Start preloading immediately after map is ready (non-blocking)
+          setTimeout(() => {
+            preloadTiles().catch(() => console.log('Tile preload completed'))
+          }, 1000)
+        }
 
         mapRef.current = map
         setIsLoading(false)
@@ -69,6 +207,64 @@ export function AircraftMapLeaflet({ aircraft, onFlightSelect, highlightedHex, o
       }
     }
   }, [])
+
+  // Handle tile style changes
+  useEffect(() => {
+    if (!mapRef.current || !tileLayerRef.current) return
+
+    const layerConfig = TILE_LAYERS[tileStyle]
+
+    // Remove old tile layer
+    mapRef.current.removeLayer(tileLayerRef.current)
+
+    // Add new tile layer
+    const newTileLayer = L.tileLayer(layerConfig.url, {
+      maxZoom: 18,
+      minZoom: 2,
+      subdomains: layerConfig.url.includes('{s}') ? 'abcd' : undefined,
+      crossOrigin: true,
+      updateWhenIdle: false,
+      updateWhenZooming: true,
+      keepBuffer: 2,
+      updateInterval: 150,
+      attribution: layerConfig.attribution,
+    })
+
+    // Apply caching to new layer
+    const originalCreateTile = (newTileLayer as any)._createTile
+    ;(newTileLayer as any)._createTile = function() {
+      const tile = originalCreateTile.call(this)
+      const originalSrc = tile.src
+
+      if (cacheRef.current) {
+        cacheRef.current.match(originalSrc).then(response => {
+          if (response) {
+            response.blob().then(blob => {
+              const cachedUrl = URL.createObjectURL(blob)
+              if (!tile.complete || tile.naturalWidth === 0) {
+                tile.src = cachedUrl
+              }
+            })
+          } else {
+            tile.addEventListener('load', () => {
+              if (cacheRef.current) {
+                fetch(originalSrc).then(fetchResponse => {
+                  if (fetchResponse.ok) {
+                    cacheRef.current!.put(originalSrc, fetchResponse.clone())
+                  }
+                }).catch(() => {})
+              }
+            }, { once: true })
+          }
+        }).catch(() => {})
+      }
+
+      return tile
+    }
+
+    newTileLayer.addTo(mapRef.current)
+    tileLayerRef.current = newTileLayer
+  }, [tileStyle])
 
   // Update aircraft markers with batching
   useEffect(() => {

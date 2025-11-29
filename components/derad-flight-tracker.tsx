@@ -17,6 +17,7 @@ import { App } from "@capacitor/app"
 import { StatusBar, Style } from "@capacitor/status-bar"
 import { FlightFilterSheet, type FlightFilters } from "./flight-filter-sheet"
 import { MiniAppsView } from "./mini-apps-view"
+import { MapEducatorTooltip } from "./map-educator-tooltip"
 
 // Lazy load heavy components
 const AircraftCharts = lazy(() => import("./aircraft-charts"))
@@ -50,6 +51,8 @@ export default function DeradFlightTracker() {
   const [activeChartIndex, setActiveChartIndex] = useState(0)
   const [miniAppIcon, setMiniAppIcon] = useState<string | null>(null)
   const [miniAppAutoOpen, setMiniAppAutoOpen] = useState<{ id: string; query?: { callsign?: string; icao?: string } } | undefined>(undefined)
+  const [mapTileStyle, setMapTileStyle] = useState<"dark" | "light" | "satellite" | "terrain">("dark")
+  const [showMapEducator, setShowMapEducator] = useState(false)
 
   // Reset mini app icon when switching away from miniapps tab
   useEffect(() => {
@@ -73,6 +76,28 @@ export default function DeradFlightTracker() {
   const handleQueryInSkyQuery = useCallback((callsign: string, icao: string) => {
     setMiniAppAutoOpen({ id: 'icao-data-loader', query: { callsign, icao } })
     setActiveMobileTab('miniapps')
+  }, [])
+
+  // Show educator tooltip on first map visit
+  useEffect(() => {
+    if (activeMobileTab === "map" && isNativeApp) {
+      const hasSeenEducator = localStorage.getItem('deradar_map_educator_seen')
+      if (!hasSeenEducator) {
+        setTimeout(() => {
+          setShowMapEducator(true)
+        }, 1000) // Show after 1 second
+      }
+    }
+  }, [activeMobileTab, isNativeApp])
+
+  // Handle map layout switch (cycle through styles)
+  const handleMapLayoutSwitch = useCallback(() => {
+    setMapTileStyle((currentStyle) => {
+      const styles: Array<"dark" | "light" | "satellite" | "terrain"> = ["dark", "light", "satellite", "terrain"]
+      const currentIndex = styles.indexOf(currentStyle)
+      const nextIndex = (currentIndex + 1) % styles.length
+      return styles[nextIndex]
+    })
   }, [])
 
   // Historical data tracking for live graphs
@@ -530,6 +555,7 @@ export default function DeradFlightTracker() {
               onFlightSelect={handleFlightSelect}
               highlightedHex={highlightedAircraftHex}
               onHighlightClear={() => setHighlightedAircraftHex(null)}
+              tileStyle={mapTileStyle}
             />
           </div>
         )}
@@ -602,6 +628,7 @@ export default function DeradFlightTracker() {
         hasActiveFilters={hasActiveFilters}
         onHomeRefresh={refresh}
         miniAppIcon={miniAppIcon}
+        onMapLayoutSwitch={handleMapLayoutSwitch}
       />
 
       <FlightFilterSheet
@@ -610,6 +637,16 @@ export default function DeradFlightTracker() {
         filters={filters}
         onApplyFilters={setFilters}
       />
+
+      {/* Map Educator Tooltip */}
+      {showMapEducator && (
+        <MapEducatorTooltip
+          onDismiss={() => {
+            setShowMapEducator(false)
+            localStorage.setItem('deradar_map_educator_seen', 'true')
+          }}
+        />
+      )}
         </div>
       )}
     </>

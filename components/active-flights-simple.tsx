@@ -5,6 +5,7 @@ import { Plane, MapPin, Locate, Database } from "lucide-react"
 import { registration_from_hexid } from "@/lib/registration-lookup"
 import type { Aircraft } from "@/types/aircraft"
 import { CountryFlag } from "@/components/country-flag"
+import { Compass } from "@/components/compass"
 
 interface ActiveFlightsSimpleProps {
   aircraft: Aircraft[]
@@ -166,14 +167,13 @@ export function ActiveFlightsSimple({
                       )}
                     </div>
 
-                    {/* Aircraft Icon */}
+                    {/* Compass showing heading */}
                     <div className="flex-shrink-0">
-                      <div className={`p-2.5 ${isEmergency ? 'bg-red-500/20' : 'bg-blue-500/15'} rounded-xl`}>
-                        <Plane
-                          className={`w-5 h-5 ${isEmergency ? 'text-red-400' : 'text-blue-400'}`}
-                          style={{ transform: `rotate(${flight.track || 0}deg)` }}
-                        />
-                      </div>
+                      <Compass
+                        heading={flight.track || 0}
+                        size={48}
+                        animate={false}
+                      />
                     </div>
                   </div>
                 </div>

@@ -108,11 +108,13 @@ export const MapTabContent = memo(function MapTabContent({
   onFlightSelect,
   highlightedHex,
   onHighlightClear,
+  tileStyle,
 }: {
   aircraft: Aircraft[]
   onFlightSelect: (flight: Aircraft) => void
   highlightedHex?: string | null
   onHighlightClear?: () => void
+  tileStyle?: "dark" | "light" | "satellite" | "terrain"
 }) {
   return (
     <Suspense
@@ -130,6 +132,7 @@ export const MapTabContent = memo(function MapTabContent({
         onFlightSelect={onFlightSelect}
         highlightedHex={highlightedHex}
         onHighlightClear={onHighlightClear}
+        tileStyle={tileStyle}
       />
     </Suspense>
   )
