@@ -45,3 +45,6 @@ ios/App/*.ipa
 !android/app/src/
 !android/app/capacitor.build.gradle
 !ios/App/App/
+
+.DS_Store
+
